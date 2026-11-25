@@ -177,21 +177,43 @@ public sealed unsafe class Source2TraceEngine
     }
 
     private readonly ILogger _logger;
-    private readonly TraceShapeDelegate? _traceShape;
-    private readonly IntPtr _gameTraceManagerPtrAddr;
-    private readonly IntPtr _traceFilterVtable;
+    private TraceShapeDelegate? _traceShape;
+    private IntPtr _gameTraceManagerPtrAddr;
+    private IntPtr _traceFilterVtable;
+    private bool _initialized;
 
-    public bool IsAvailable { get; }
+    public bool IsEnabled { get; private set; }
+    public bool IsAvailable => IsEnabled && _initialized;
 
-    public Source2TraceEngine(ILogger logger)
+    public Source2TraceEngine(ILogger logger, bool enabled = false)
     {
         _logger = logger;
+        IsEnabled = enabled;
+
+        if (!enabled)
+        {
+            _logger.LogInformation("[WcsCs2] Source2TraceEngine disabled by config (use_native_trace=false); using safe managed teleport fallback.");
+            return;
+        }
+
+        EnsureInitialized();
+    }
+
+    public void SetEnabled(bool enabled)
+    {
+        IsEnabled = enabled;
+        if (enabled && !_initialized)
+            EnsureInitialized();
+    }
+
+    private bool EnsureInitialized()
+    {
+        if (_initialized) return true;
 
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
             _logger.LogWarning("[WcsCs2] Source2TraceEngine: Linux x64 signatures only; tracing disabled on this OS.");
-            IsAvailable = false;
-            return;
+            return false;
         }
 
         try
@@ -206,8 +228,7 @@ public sealed unsafe class Source2TraceEngine
                 _logger.LogError(
                     "[WcsCs2] Source2TraceEngine: signature resolution failed (TraceShape=0x{T:X}, GTM=0x{G:X}, Vtable=0x{V:X}). Teleport collision trace disabled safely.",
                     traceShapeAddr.ToInt64(), gtmInstrAddr.ToInt64(), vtableInstrAddr.ToInt64());
-                IsAvailable = false;
-                return;
+                return false;
             }
 
             _gameTraceManagerPtrAddr = ResolveRipRelative(gtmInstrAddr, 3, 7);
@@ -217,20 +238,52 @@ public sealed unsafe class Source2TraceEngine
             if (_gameTraceManagerPtrAddr == IntPtr.Zero || _traceFilterVtable == IntPtr.Zero)
             {
                 _logger.LogError("[WcsCs2] Source2TraceEngine: RIP-relative resolution produced zero pointer.");
-                IsAvailable = false;
-                return;
+                return false;
             }
 
-            IsAvailable = true;
+            _initialized = true;
             _logger.LogInformation(
                 "[WcsCs2] Source2TraceEngine initialized cleanly (TraceShape=0x{T:X}, GTM*=0x{G:X}, FilterVtable=0x{V:X}).",
                 traceShapeAddr.ToInt64(), _gameTraceManagerPtrAddr.ToInt64(), _traceFilterVtable.ToInt64());
+            return true;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "[WcsCs2] Source2TraceEngine failed to initialize; tracing disabled safely.");
-            IsAvailable = false;
+            return false;
         }
+    }
+
+    /// <summary>
+    /// Diagnostic self-test invoked ONLY via explicit server console/admin command `wcs_tracetest`.
+    /// Tests both Line and Player-BBox Hull traces from a known map origin using 32-byte aligned native buffers.
+    /// </summary>
+    public string RunDiagnosticSelfTest(Vector3 testOrigin)
+    {
+        if (!EnsureInitialized())
+            return "FAIL: Source2TraceEngine failed to initialize signatures.";
+
+        var mins = new Vector3(-16f, -16f, 0f);
+        var maxs = new Vector3(16f, 16f, 72f);
+
+        // 1. Line trace downward to floor
+        var lineStart = testOrigin + new Vector3(0f, 0f, 64f);
+        var lineEnd = testOrigin - new Vector3(0f, 0f, 256f);
+        var lineRay = NativeRay.Line();
+        bool lineOk = TryTraceInternal(ref lineRay, lineStart, lineEnd, null, (ulong)Cs2InteractionLayers.MaskPlayerSolid, bypassEnabledCheck: true, out var lineHit);
+
+        // 2. Player-BBox hull clearance check at spawn origin + 4z
+        var hullPos = testOrigin + new Vector3(0f, 0f, 4f);
+        var hullRay = NativeRay.Hull(mins, maxs);
+        bool hullClearOk = TryTraceInternal(ref hullRay, hullPos, hullPos + new Vector3(0f, 0f, 0.25f), null, (ulong)Cs2InteractionLayers.MaskPlayerSolid, bypassEnabledCheck: true, out var hullClearHit);
+
+        // 3. Player-BBox hull sweep horizontally (+X 1500u) to hit map wall/prop
+        var sweepEnd = hullPos + new Vector3(1500f, 0f, 0f);
+        bool hullSweepOk = TryTraceInternal(ref hullRay, hullPos, sweepEnd, null, (ulong)Cs2InteractionLayers.MaskPlayerSolid, bypassEnabledCheck: true, out var hullSweepHit);
+
+        return $"OK: LineDown(ok={lineOk}, frac={lineHit.Fraction:F3}, solid={lineHit.StartInSolid}, normZ={lineHit.Normal.Z:F2}, endZ={lineHit.EndPos.Z:F1}) | " +
+               $"HullClear(ok={hullClearOk}, frac={hullClearHit.Fraction:F3}, solid={hullClearHit.StartInSolid}) | " +
+               $"HullSweepX(ok={hullSweepOk}, frac={hullSweepHit.Fraction:F3}, solid={hullSweepHit.StartInSolid}, end=({hullSweepHit.EndPos.X:F0},{hullSweepHit.EndPos.Y:F0},{hullSweepHit.EndPos.Z:F0}))";
     }
 
     private static IntPtr ResolveRipRelative(IntPtr instructionAddress, int relOffset, int instructionSize)
@@ -248,7 +301,7 @@ public sealed unsafe class Source2TraceEngine
         Cs2InteractionLayers mask = Cs2InteractionLayers.MaskPlayerSolid)
     {
         var ray = NativeRay.Line();
-        return TryTraceInternal(ref ray, start, end, ignorePawn, (ulong)mask, out result);
+        return TryTraceInternal(ref ray, start, end, ignorePawn, (ulong)mask, bypassEnabledCheck: false, out result);
     }
 
     public bool TryTraceHull(
@@ -261,7 +314,7 @@ public sealed unsafe class Source2TraceEngine
         Cs2InteractionLayers mask = Cs2InteractionLayers.MaskPlayerSolid)
     {
         var ray = NativeRay.Hull(mins, maxs);
-        return TryTraceInternal(ref ray, start, end, ignorePawn, (ulong)mask, out result);
+        return TryTraceInternal(ref ray, start, end, ignorePawn, (ulong)mask, bypassEnabledCheck: false, out result);
     }
 
     private bool TryTraceInternal(
@@ -270,10 +323,11 @@ public sealed unsafe class Source2TraceEngine
         Vector3 end,
         CCSPlayerPawn? ignorePawn,
         ulong interactsWith,
+        bool bypassEnabledCheck,
         out TraceHitResult result)
     {
         result = default;
-        if (!IsAvailable || _traceShape == null || _gameTraceManagerPtrAddr == IntPtr.Zero)
+        if ((!bypassEnabledCheck && !IsAvailable) || !_initialized || _traceShape == null || _gameTraceManagerPtrAddr == IntPtr.Zero)
             return false;
 
         IntPtr gameTraceManager = *(IntPtr*)_gameTraceManagerPtrAddr;
@@ -289,31 +343,53 @@ public sealed unsafe class Source2TraceEngine
             hierarchyId = ignorePawn.Collision?.CollisionAttribute?.HierarchyId ?? 0;
         }
 
-        NativeTraceFilter filter = NativeTraceFilter.Create(_traceFilterVtable, interactsWith, skipId, hierarchyId);
-        NativeGameTrace trace = NativeGameTrace.Initialized();
-        NativeRay localRay = ray;
-        Vector3 localStart = start;
-        Vector3 localEnd = end;
-
-        _traceShape(gameTraceManager, &localRay, &localStart, &localEnd, &filter, &trace);
-
-        // Guard against NaN/invalid outputs from engine
-        if (!float.IsFinite(trace.Fraction) || !float.IsFinite(trace.EndPos.X) ||
-            !float.IsFinite(trace.EndPos.Y) || !float.IsFinite(trace.EndPos.Z))
+        // Allocate a single 32-byte-aligned unmanaged slab so CGameTrace (0x30 CTransform movaps!),
+        // CTraceFilter, Ray, and start/end vectors are ALL guaranteed >= 16-byte aligned and never moved by GC.
+        // Layout: [0x000] NativeGameTrace (0x100) | [0x100] NativeTraceFilter (0x50) | [0x150] NativeRay (0x30) | [0x180] start (0x10) | [0x190] end (0x10)
+        const nuint SlabSize = 0x1A0;
+        byte* slab = (byte*)NativeMemory.AlignedAlloc(SlabSize, 32);
+        try
         {
-            return false;
+            NativeMemory.Clear(slab, SlabSize);
+
+            NativeGameTrace* pTrace = (NativeGameTrace*)(slab + 0x000);
+            NativeTraceFilter* pFilter = (NativeTraceFilter*)(slab + 0x100);
+            NativeRay* pRay = (NativeRay*)(slab + 0x150);
+            Vector3* pStart = (Vector3*)(slab + 0x180);
+            Vector3* pEnd = (Vector3*)(slab + 0x190);
+
+            *pTrace = NativeGameTrace.Initialized();
+            *pFilter = NativeTraceFilter.Create(_traceFilterVtable, interactsWith, skipId, hierarchyId);
+            *pRay = ray;
+            *pStart = start;
+            *pEnd = end;
+
+            _traceShape(gameTraceManager, pRay, pStart, pEnd, pFilter, pTrace);
+
+            NativeGameTrace trace = *pTrace;
+
+            // Guard against NaN/invalid outputs from engine
+            if (!float.IsFinite(trace.Fraction) || !float.IsFinite(trace.EndPos.X) ||
+                !float.IsFinite(trace.EndPos.Y) || !float.IsFinite(trace.EndPos.Z))
+            {
+                return false;
+            }
+
+            result = new TraceHitResult
+            {
+                StartPos = trace.StartPos,
+                EndPos = trace.EndPos,
+                Normal = trace.Normal,
+                HitPosition = trace.HitPosition,
+                Fraction = Math.Clamp(trace.Fraction, 0f, 1f),
+                StartInSolid = trace.StartInSolid != 0,
+                HitEntity = trace.HitEntity
+            };
+            return true;
         }
-
-        result = new TraceHitResult
+        finally
         {
-            StartPos = trace.StartPos,
-            EndPos = trace.EndPos,
-            Normal = trace.Normal,
-            HitPosition = trace.HitPosition,
-            Fraction = Math.Clamp(trace.Fraction, 0f, 1f),
-            StartInSolid = trace.StartInSolid != 0,
-            HitEntity = trace.HitEntity
-        };
-        return true;
+            NativeMemory.AlignedFree(slab);
+        }
     }
 }

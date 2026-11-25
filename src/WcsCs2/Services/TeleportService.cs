@@ -56,9 +56,9 @@ public sealed class TeleportService : ITeleportService
         if (!PlayerStateManager.TryGetAlivePawn(player, out var pawn) || pawn.AbsOrigin == null)
             return false;
 
-        // Never fall back to blind wall-clipping teleport when physics tracer is unavailable
+        // Safe managed path when native physics tracing is disabled or unavailable (ZERO native calls)
         if (!_tracer.IsAvailable)
-            return false;
+            return TeleportManagedFallback(player, pawn, maxDistance);
 
         Vector3 origin = ToVec3(pawn.AbsOrigin);
         Vector3 eye = GetEyePosition(pawn);
@@ -339,6 +339,101 @@ public sealed class TeleportService : ITeleportService
             cosPitch * MathF.Cos(yawRad),
             cosPitch * MathF.Sin(yawRad),
             -MathF.Sin(pitchRad)));
+    }
+
+    private bool TeleportManagedFallback(CCSPlayerController player, CCSPlayerPawn pawn, float maxDistance)
+    {
+        // Conservative pure-managed ray-march fallback (zero native pointers):
+        // - Clamped to short conservative blink distance (<= 384u)
+        // - Refuses steep downward/upward angles that risk floor/ceiling clipping
+        // - Ray-marches in 32u steps from player origin and rejects any candidate overlapping alive players or physics/dynamic props
+        var eyeAngles = pawn.EyeAngles;
+        if (!float.IsFinite(eyeAngles.X) || !float.IsFinite(eyeAngles.Y))
+            return false;
+
+        // Refuse steep vertical pitches where blind projection is most likely to clip into floors/ceilings
+        if (eyeAngles.X > 40f || eyeAngles.X < -40f)
+            return false;
+
+        Vector3 origin = ToVec3(pawn.AbsOrigin!);
+        float clampedPitch = Math.Clamp(eyeAngles.X, -25f, 15f) * (MathF.PI / 180f);
+        float yawRad = eyeAngles.Y * (MathF.PI / 180f);
+        float cosPitch = MathF.Cos(clampedPitch);
+        Vector3 dir = Vector3.Normalize(new Vector3(
+            cosPitch * MathF.Cos(yawRad),
+            cosPitch * MathF.Sin(yawRad),
+            -MathF.Sin(clampedPitch)));
+
+        float safeMaxDist = Math.Clamp(maxDistance, 64f, 384f);
+
+        // Snapshot nearby alive players & props once so we never land inside them
+        var obstacles = CollectManagedObstacles(player);
+
+        const float stepSize = 32f;
+        Vector3? bestDest = null;
+
+        for (float d = stepSize; d <= safeMaxDist; d += stepSize)
+        {
+            Vector3 candidate = new(
+                origin.X + dir.X * d,
+                origin.Y + dir.Y * d,
+                origin.Z + MathF.Max(8f, dir.Z * d + 8f));
+
+            if (HitsManagedObstacle(candidate, obstacles))
+                break; // Stop immediately at the first player/prop obstacle along the ray
+
+            if (d >= 64f)
+                bestDest = candidate;
+        }
+
+        if (!bestDest.HasValue)
+            return false;
+
+        pawn.Teleport(new Vector(bestDest.Value.X, bestDest.Value.Y, bestDest.Value.Z), null, Vector.Zero);
+        return true;
+    }
+
+    private static List<(Vector3 Pos, float Radius, float Height)> CollectManagedObstacles(CCSPlayerController self)
+    {
+        var list = new List<(Vector3, float, float)>();
+
+        foreach (var p in Utilities.GetPlayers())
+        {
+            if (p == null || !p.IsValid || p.Slot == self.Slot || !p.PawnIsAlive) continue;
+            var pos = p.PlayerPawn?.Value?.AbsOrigin;
+            if (pos != null)
+                list.Add((new Vector3(pos.X, pos.Y, pos.Z), 38f, 76f));
+        }
+
+        foreach (var prop in Utilities.FindAllEntitiesByDesignerName<CBreakableProp>("prop_physics_override"))
+        {
+            if (prop != null && prop.IsValid && prop.AbsOrigin != null)
+                list.Add((new Vector3(prop.AbsOrigin.X, prop.AbsOrigin.Y, prop.AbsOrigin.Z), 40f, 64f));
+        }
+
+        foreach (var prop in Utilities.FindAllEntitiesByDesignerName<CDynamicProp>("prop_dynamic_override"))
+        {
+            if (prop != null && prop.IsValid && prop.AbsOrigin != null)
+                list.Add((new Vector3(prop.AbsOrigin.X, prop.AbsOrigin.Y, prop.AbsOrigin.Z), 40f, 64f));
+        }
+
+        return list;
+    }
+
+    private static bool HitsManagedObstacle(Vector3 candidate, List<(Vector3 Pos, float Radius, float Height)> obstacles)
+    {
+        foreach (var (pos, radius, height) in obstacles)
+        {
+            float dx = candidate.X - pos.X;
+            float dy = candidate.Y - pos.Y;
+            if (dx * dx + dy * dy < radius * radius)
+            {
+                float dz = candidate.Z - pos.Z;
+                if (dz > -64f && dz < height)
+                    return true;
+            }
+        }
+        return false;
     }
 
     private static Vector3 ToVec3(Vector v) => new(v.X, v.Y, v.Z);

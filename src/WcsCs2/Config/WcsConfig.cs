@@ -115,6 +115,10 @@ public sealed class WcsConfig
     [JsonPropertyName("allow_inspect_ultimate_bind")]
     public bool AllowInspectUltimateBind { get; set; } = true;
 
+    // Kill-switch for native Source 2 TraceShape physics tracing (set false to fall back to pure managed teleport)
+    [JsonPropertyName("use_native_trace")]
+    public bool UseNativeTrace { get; set; } = true;
+
     // Bots
     [JsonPropertyName("bot_random_race")]
     public bool BotRandomRace { get; set; } = true;

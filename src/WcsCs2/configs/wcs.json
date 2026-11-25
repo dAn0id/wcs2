@@ -35,6 +35,7 @@
   "unlock_race_notification": true,
   "default_menu_type": "wasd",
   "allow_inspect_ultimate_bind": true,
+  "use_native_trace": true,
   "bot_random_race": true,
   "bot_ability_chance": 0.15,
   "bot_ignore_level_requirement": false,

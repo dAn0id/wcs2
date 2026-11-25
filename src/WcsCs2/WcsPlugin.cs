@@ -68,7 +68,7 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
         _state = new PlayerStateManager(this);
         _progression = new ProgressionService(this, _config, _registry, _repo, _effects, Logger);
         _combat = new CombatService(_state, _effects, _progression);
-        _tracer = new Source2TraceEngine(Logger);
+        _tracer = new Source2TraceEngine(Logger, _config.UseNativeTrace);
         _teleport = new TeleportService(_weapons, _tracer, _rng);
         _shop = new ShopService(_registry, _progression, _effects);
         _bots = new BotRaceService(_config, _registry, _progression, _rng);
@@ -735,9 +735,25 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
             string configDir = Path.Combine(ModuleDirectory, "configs");
             _config = _registry.LoadConfig(configDir);
             _registry.LoadAll(configDir);
-            string msg = $"Reloaded WCS: {_registry.Races.Count} races, {_registry.Items.Count} items.";
+            _tracer.SetEnabled(_config.UseNativeTrace);
+            string msg = $"Reloaded WCS: {_registry.Races.Count} races, {_registry.Items.Count} items (use_native_trace={_config.UseNativeTrace}, tracer_available={_tracer.IsAvailable}).";
             if (p != null) _effects.PrintChat(p, msg);
             else Logger.LogInformation("[WcsCs2] {Msg}", msg);
+        });
+
+        // Diagnostic command (server console or WCS admin) to safely verify aligned Source2TraceEngine live
+        AddCommand("wcs_tracetest", "Run Source2TraceEngine line+hull self-test (console/admin only)", (p, _) =>
+        {
+            if (p != null && !_menus.IsWcsAdmin(p)) return;
+            var spawnOrigin = _teleport.GetRandomTeamSpawn(CsTeam.CounterTerrorist)
+                              ?? _teleport.GetRandomTeamSpawn(CsTeam.Terrorist)
+                              ?? new Vector(0f, 0f, 64f);
+            var origin3 = new System.Numerics.Vector3(spawnOrigin.X, spawnOrigin.Y, spawnOrigin.Z);
+            string report = _tracer.RunDiagnosticSelfTest(origin3);
+            string msg = $"[WcsCs2] wcs_tracetest @ ({origin3.X:F0},{origin3.Y:F0},{origin3.Z:F0}): {report}";
+            Logger.LogInformation("{Msg}", msg);
+            if (p != null) _effects.PrintChat(p, msg);
+            else Server.PrintToConsole(msg);
         });
     }
 
