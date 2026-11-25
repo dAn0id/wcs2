@@ -1,0 +1,221 @@
+{
+  "key": "flame_predator",
+  "name": "Flame Predator",
+  "author": "Kryptonite, Fast.Food & Manifest",
+  "description": "Hunting down his prey to kill it for the fun",
+  "required_level": 300,
+  "max_level": 0,
+  "team_limit": 0,
+  "restrict_team": 0,
+  "categories": [
+    "Standard races",
+    "Knife races",
+    "All races"
+  ],
+  "allowed_weapons": [
+    "weapon_knife",
+    "weapon_hegrenade",
+    "weapon_flashbang",
+    "weapon_smokegrenade",
+    "weapon_molotov",
+    "weapon_incgrenade",
+    "weapon_decoy",
+    "weapon_c4"
+  ],
+  "spawn_actions": [
+    {
+      "type": "give_weapon",
+      "target": "self",
+      "delay": 0.1,
+      "params": {
+        "weapon": "weapon_knife",
+        "strip_primary": true,
+        "strip_secondary": true,
+        "message": "Weaponry - You can only use grenades and a knife."
+      }
+    },
+    {
+      "type": "beam_ring",
+      "target": "self",
+      "params": {
+        "radius": 75,
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "width": 5,
+        "duration": 2.0,
+        "z_offset": 15,
+        "count": 4,
+        "z_step": 10
+      }
+    }
+  ],
+  "skills": [
+    {
+      "key": "berserk",
+      "name": "Berserk (You will need it)",
+      "description": "Inject yourself with adrenaline to gain 20-60% more speed and 10-50 more HP",
+      "trigger": "PlayerSpawn",
+      "max_level": 5,
+      "required_level": 0,
+      "actions": [
+        {
+          "type": "speed",
+          "target": "self",
+          "level_values": {
+            "value": [0.20, 0.30, 0.40, 0.50, 0.60]
+          },
+          "params": {
+            "mode": "add",
+            "source": "berserk"
+          }
+        },
+        {
+          "type": "health",
+          "target": "self",
+          "level_values": {
+            "amount": [10, 20, 30, 40, 50]
+          },
+          "params": {
+            "mode": "add",
+            "update_max_health": true,
+            "message": "Berserk - Granted you +{amount} health and bonus speed."
+          }
+        }
+      ]
+    },
+    {
+      "key": "cloak_of_invisibility",
+      "name": "Cloak of Invisibility",
+      "description": "Puts on your cloak to become 10-52% invisible",
+      "trigger": "PlayerSpawn",
+      "max_level": 5,
+      "required_level": 0,
+      "actions": [
+        {
+          "type": "invisibility",
+          "target": "self",
+          "delay": 0.5,
+          "level_values": {
+            "alpha": [230, 204, 171, 133, 122]
+          },
+          "params": {
+            "r": 255,
+            "g": 255,
+            "b": 255,
+            "message": "Cloak of Invisibility - Made you {pct}% invisible."
+          }
+        }
+      ]
+    },
+    {
+      "key": "fp_levitation",
+      "name": "Levitation",
+      "description": "Reduces your gravity by 30-70%",
+      "trigger": "PlayerSpawn",
+      "max_level": 5,
+      "required_level": 0,
+      "actions": [
+        {
+          "type": "gravity",
+          "target": "self",
+          "delay": 0.2,
+          "level_values": {
+            "value": [0.30, 0.40, 0.50, 0.60, 0.70]
+          },
+          "params": {
+            "mode": "subtract",
+            "source": "fp_levitation",
+            "message": "Levitation - Reduced your gravity to {pct}%."
+          }
+        }
+      ]
+    },
+    {
+      "key": "claw_attack",
+      "name": "Claw Attack",
+      "description": "5-15% Chance on knife hit to force your foe to drop their primary weapon",
+      "trigger": "PlayerAttacker",
+      "max_level": 5,
+      "required_level": 0,
+      "weapons": ["weapon_knife"],
+      "chances": [5, 8, 10, 13, 15],
+      "actions": [
+        {
+          "type": "drop_weapon",
+          "target": "victim",
+          "params": {
+            "primary_only": true,
+            "attacker_message": "You forced {victim} to drop their primary weapon!",
+            "victim_message": "You have been forced to drop your primary weapon!"
+          }
+        }
+      ]
+    },
+    {
+      "key": "burning_blade",
+      "name": "Burning Blade",
+      "description": "Striking an enemy with your knife deals an additional 8-35 damage",
+      "trigger": "PlayerAttacker",
+      "max_level": 5,
+      "required_level": 0,
+      "weapons": ["weapon_knife"],
+      "actions": [
+        {
+          "type": "bonus_damage",
+          "target": "victim",
+          "level_values": {
+            "damage": [8, 16, 21, 28, 35]
+          },
+          "params": {
+            "weapon_hint": "knife",
+            "center_message": "Burning blade did + {damage} damage!"
+          }
+        },
+        {
+          "type": "beam_ring",
+          "target": "victim",
+          "params": {
+            "radius": 50,
+            "r": 255,
+            "g": 255,
+            "b": 255,
+            "width": 5,
+            "duration": 1.0,
+            "z_offset": 10,
+            "count": 2,
+            "z_step": 8
+          }
+        }
+      ]
+    },
+    {
+      "key": "burning_inferno",
+      "name": "Burning Inferno",
+      "description": "50% Chance to explode upon death dealing 90-135 damage to enemies within 255 range",
+      "trigger": "PlayerDeath",
+      "max_level": 5,
+      "required_level": 8,
+      "chances": [50],
+      "actions": [
+        {
+          "type": "aoe_damage",
+          "target": "nearby_enemies",
+          "level_values": {
+            "damage": [90, 100, 110, 120, 135]
+          },
+          "params": {
+            "radius": 255,
+            "max_targets": 20,
+            "respect_immunity": true,
+            "refund_if_none": false,
+            "draw_beams": false,
+            "draw_rings": true,
+            "ring_color": [255, 90, 20],
+            "weapon_hint": "hegrenade"
+          }
+        }
+      ]
+    }
+  ]
+}

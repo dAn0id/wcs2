@@ -1,0 +1,68 @@
+{
+  "key": "succubus_hunter",
+  "name": "Succubus Hunter",
+  "author": "Kryptonite & Manifest",
+  "description": "A hunter striving to catch succubi demons",
+  "required_level": 50,
+  "max_level": 0,
+  "team_limit": 0,
+  "restrict_team": 0,
+  "categories": [
+    "Standard races",
+    "All races"
+  ],
+  "custom_handler": "succubus_skulls",
+  "skills": [
+    {
+      "key": "head_hunter",
+      "name": "Head hunter",
+      "description": "2-10% Chance to deal 9-15 extra damage and collect a skull (capped at 5 skulls)",
+      "trigger": "PlayerAttacker",
+      "max_level": 8,
+      "required_level": 0,
+      "chances": [2, 4, 5, 6, 7, 8, 9, 10],
+      "custom_handler": "succubus_skulls"
+    },
+    {
+      "key": "incantation",
+      "name": "Incantation",
+      "description": "15-100% Chance on spawn to receive 10-50 health and $150-$750 depending on skulls collected",
+      "trigger": "PlayerSpawn",
+      "max_level": 8,
+      "required_level": 0,
+      "chances": [15, 30, 45, 60, 70, 80, 90, 100],
+      "custom_handler": "succubus_skulls"
+    },
+    {
+      "key": "tackle",
+      "name": "Tackle",
+      "description": "Increases your jumping length",
+      "trigger": "PlayerSpawn",
+      "max_level": 8,
+      "required_level": 0,
+      "actions": [
+        {
+          "type": "longjump",
+          "target": "self",
+          "level_values": {
+            "multiplier": [0.5, 0.9, 1.3, 1.7, 2.1, 2.4, 2.7, 3.0]
+          },
+          "params": {
+            "mode": "add",
+            "message": "Tackle - Increased your jump length."
+          }
+        }
+      ]
+    },
+    {
+      "key": "transformation",
+      "name": "Transformation",
+      "description": "Spend 1 skull to gain +25% speed (cap 200%), +25 HP (cap 200), and 50% gravity",
+      "trigger": "PlayerUltimate",
+      "max_level": 8,
+      "required_level": 8,
+      "cooldowns": [30, 28, 25, 22, 19, 16, 13, 10],
+      "custom_handler": "succubus_skulls"
+    }
+  ]
+}

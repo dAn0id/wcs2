@@ -1,0 +1,142 @@
+{
+  "key": "crypt_lord",
+  "name": "Crypt Lord",
+  "author": "Kryptonite & Manifest",
+  "description": "Once the mighty kings of the subterranean spider kingdom of Azjol-Nerub",
+  "required_level": 30,
+  "max_level": 0,
+  "team_limit": 0,
+  "restrict_team": 0,
+  "categories": [
+    "Standard races",
+    "All races"
+  ],
+  "skills": [
+    {
+      "key": "impale",
+      "name": "Impale",
+      "description": "5-15% Chance to knock your enemy up in the air and shake them when attacking",
+      "trigger": "PlayerAttacker",
+      "max_level": 8,
+      "required_level": 0,
+      "chances": [5, 7, 9, 11, 12, 13, 14, 15],
+      "actions": [
+        {
+          "type": "push",
+          "target": "victim",
+          "params": {
+            "vx": 0,
+            "vy": 0,
+            "vz": 520,
+            "additive": true
+          }
+        },
+        {
+          "type": "shake",
+          "target": "victim",
+          "params": {
+            "amplitude": 22,
+            "frequency": 15,
+            "duration": 3.0,
+            "attacker_message": "Impale - You impaled and shook {victim}!",
+            "victim_message": "Impale - You have been impaled by a Crypt Lord!"
+          }
+        },
+        {
+          "type": "beam_ring",
+          "target": "victim",
+          "params": {
+            "radius": 80,
+            "r": 255,
+            "g": 0,
+            "b": 0,
+            "width": 6,
+            "duration": 0.6,
+            "z_offset": 10
+          }
+        }
+      ]
+    },
+    {
+      "key": "spiked_carapace",
+      "name": "Spiked carapace",
+      "description": "Reduces incoming damage by 5-20% and reflects 3-7 mirror damage when attacked",
+      "trigger": "PlayerSpawn",
+      "max_level": 8,
+      "required_level": 0,
+      "actions": [
+        {
+          "type": "damage_absorb",
+          "target": "self",
+          "level_values": {
+            "absorb": [0.05, 0.08, 0.10, 0.12, 0.14, 0.16, 0.18, 0.20]
+          },
+          "params": {
+            "mirror_min": 3,
+            "mirror_max": 7,
+            "message": "Spiked carapace - Reduces incoming damage by {pct}% and reflects 3-7 damage."
+          }
+        }
+      ]
+    },
+    {
+      "key": "shadow_strike",
+      "name": "Shadow strike",
+      "description": "Grants you 5-15% chance to deal an additional 12-17 damage when attacking",
+      "trigger": "PlayerAttacker",
+      "max_level": 8,
+      "required_level": 0,
+      "chances": [5, 7, 9, 11, 12, 13, 14, 15],
+      "actions": [
+        {
+          "type": "bonus_damage",
+          "target": "victim",
+          "params": {
+            "min_damage": 12,
+            "max_damage": 17,
+            "center_message": "Shadow strike dealt {damage} extra damage!"
+          }
+        }
+      ]
+    },
+    {
+      "key": "locust_swarm",
+      "name": "Locust swarm",
+      "description": "Deals 35 damage to a random enemy; you receive 35 health and 5-40 armor (cap: 225 HP, 250 armor)",
+      "trigger": "PlayerUltimate",
+      "max_level": 8,
+      "required_level": 8,
+      "cooldowns": [25, 22, 20, 19, 18, 17, 16, 15],
+      "actions": [
+        {
+          "type": "random_enemy_drain",
+          "target": "self",
+          "level_values": {
+            "armor": [5, 10, 15, 20, 25, 30, 35, 40]
+          },
+          "params": {
+            "damage": 35,
+            "heal": 35,
+            "health_cap": 225,
+            "armor_cap": 250
+          }
+        },
+        {
+          "type": "beam_ring",
+          "target": "self",
+          "params": {
+            "radius": 70,
+            "r": 0,
+            "g": 50,
+            "b": 200,
+            "width": 6,
+            "duration": 1.0,
+            "z_offset": 20,
+            "count": 2,
+            "z_step": 20
+          }
+        }
+      ]
+    }
+  ]
+}

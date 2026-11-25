@@ -1,0 +1,26 @@
+# Legacy CS:GO server mirror (contains legacy configs & SQLite DB)
+source-wcs/
+
+# Internal local notes & tooling
+docs/
+tools/
+
+# Build & publish artifacts
+publish/
+**/bin/
+**/obj/
+
+# Databases
+*.sqlite
+*.sqlite*
+*.db
+*.db-*
+
+# IDE / OS
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+.DS_Store
+Thumbs.db

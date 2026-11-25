@@ -1,0 +1,108 @@
+{
+  "key": "warden",
+  "name": "Warden",
+  "author": "Kryptonite & Manifest",
+  "description": "The main Warden and prison keeper of The Vault of the Wardens",
+  "required_level": 30,
+  "max_level": 0,
+  "team_limit": 0,
+  "restrict_team": 0,
+  "categories": [
+    "Standard races",
+    "All races"
+  ],
+  "skills": [
+    {
+      "key": "fan_of_knives",
+      "name": "Fan of knives",
+      "description": "1-8% Chance to cast Fan of Knives, dealing 8-19 damage to enemies within 225 range of you",
+      "trigger": "PlayerAttacker",
+      "max_level": 8,
+      "required_level": 0,
+      "chances": [1, 2, 3, 4, 5, 6, 7, 8],
+      "actions": [
+        {
+          "type": "aoe_damage",
+          "target": "nearby_enemies",
+          "params": {
+            "radius": 225,
+            "min_damage": 8,
+            "max_damage": 19,
+            "max_targets": 20,
+            "respect_immunity": false,
+            "refund_if_none": false,
+            "draw_beams": false,
+            "draw_rings": true,
+            "ring_color": [255, 255, 255],
+            "weapon_hint": "knife"
+          }
+        }
+      ]
+    },
+    {
+      "key": "resistance",
+      "name": "Resistance",
+      "description": "Gives you 15-100% chance to be immune to enemy ultimates",
+      "trigger": "PlayerSpawn",
+      "max_level": 8,
+      "required_level": 0,
+      "chances": [15, 30, 45, 60, 70, 80, 90, 100],
+      "actions": [
+        {
+          "type": "ultimate_immunity",
+          "target": "self",
+          "params": {
+            "message": "Resistance - Renders you immune to enemy ultimates this round."
+          }
+        }
+      ]
+    },
+    {
+      "key": "warden_shadow_strike",
+      "name": "Shadow strike",
+      "description": "5-15% Chance to poison your target for 4 seconds dealing 4 damage every 1 second",
+      "trigger": "PlayerAttacker",
+      "max_level": 8,
+      "required_level": 0,
+      "chances": [5, 7, 9, 11, 12, 13, 14, 15],
+      "actions": [
+        {
+          "type": "burn_dot",
+          "target": "victim",
+          "params": {
+            "duration": 4.0,
+            "damage_per_tick": 4,
+            "interval": 1.0,
+            "color": [25, 255, 20],
+            "attacker_message": "Shadow strike - You poisoned {victim} for 4 seconds.",
+            "victim_message": "Shadow strike - You have been poisoned by {attacker} for 4 seconds!"
+          }
+        },
+        {
+          "type": "beam",
+          "target": "victim",
+          "params": {
+            "from": "attacker",
+            "to": "victim",
+            "r": 25,
+            "g": 255,
+            "b": 20,
+            "width": 5,
+            "duration": 0.5,
+            "z_offset": 20
+          }
+        }
+      ]
+    },
+    {
+      "key": "restoration",
+      "name": "Restoration",
+      "description": "Allows you to restore health (below 175 HP); the lower your health, the more you receive",
+      "trigger": "PlayerUltimate",
+      "max_level": 8,
+      "required_level": 8,
+      "cooldowns": [35, 32, 30, 28, 26, 24, 22, 20],
+      "custom_handler": "warden_restoration"
+    }
+  ]
+}

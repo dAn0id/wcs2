@@ -1,0 +1,156 @@
+{
+  "key": "human_alliance",
+  "name": "Human Alliance",
+  "author": "Kryptonite & Manifest",
+  "description": "A human from the alliance stronghold Stormwind",
+  "required_level": 0,
+  "max_level": 1200,
+  "team_limit": 0,
+  "restrict_team": 0,
+  "categories": [
+    "Standard races",
+    "All races"
+  ],
+  "spawn_actions": [
+    {
+      "type": "set_ultimate_cooldown",
+      "target": "self",
+      "params": {
+        "seconds": 5.0
+      }
+    },
+    {
+      "type": "beam_ring",
+      "target": "self",
+      "params": {
+        "radius": 80,
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "width": 5,
+        "duration": 1.5,
+        "z_offset": 10,
+        "count": 3,
+        "z_step": 12
+      }
+    }
+  ],
+  "skills": [
+    {
+      "key": "invisibility",
+      "name": "Invisibility",
+      "description": "Makes you 10-45% partially invisible, making you harder to see",
+      "trigger": "PlayerSpawn",
+      "max_level": 8,
+      "required_level": 0,
+      "actions": [
+        {
+          "type": "invisibility",
+          "target": "self",
+          "delay": 0.5,
+          "level_values": {
+            "alpha": [230, 217, 204, 191, 179, 166, 153, 140]
+          },
+          "params": {
+            "r": 255,
+            "g": 255,
+            "b": 255,
+            "message": "Invisibility - You spawned with {pct}% invisibility."
+          }
+        }
+      ]
+    },
+    {
+      "key": "devotion_aura",
+      "name": "Devotion aura",
+      "description": "Grants an additional 15-50 health when spawning",
+      "trigger": "PlayerSpawn",
+      "max_level": 8,
+      "required_level": 0,
+      "actions": [
+        {
+          "type": "health",
+          "target": "self",
+          "level_values": {
+            "amount": [15, 20, 25, 30, 35, 40, 45, 50]
+          },
+          "params": {
+            "mode": "add",
+            "update_max_health": true,
+            "message": "Devotion aura - Increased your health by {amount}."
+          }
+        }
+      ]
+    },
+    {
+      "key": "bash",
+      "name": "Bash",
+      "description": "When attacking you have 5-15% chance to hold your enemy in place for 1 second",
+      "trigger": "PlayerAttacker",
+      "max_level": 8,
+      "required_level": 0,
+      "chances": [5, 7, 9, 11, 12, 13, 14, 15],
+      "actions": [
+        {
+          "type": "freeze",
+          "target": "victim",
+          "params": {
+            "duration": 1.0,
+            "prevent_stack": true,
+            "center_message": "Bash immobilized {victim} for 1 second!",
+            "victim_message": "You were bashed by {attacker} for 1 second!"
+          }
+        },
+        {
+          "type": "beam",
+          "target": "victim",
+          "params": {
+            "from": "attacker",
+            "to": "victim",
+            "r": 255,
+            "g": 255,
+            "b": 255,
+            "width": 5,
+            "duration": 0.5,
+            "z_offset": 20
+          }
+        },
+        {
+          "type": "beam_ring",
+          "target": "victim",
+          "params": {
+            "radius": 45,
+            "r": 255,
+            "g": 255,
+            "b": 255,
+            "width": 6,
+            "duration": 0.5,
+            "z_offset": 25
+          }
+        }
+      ]
+    },
+    {
+      "key": "teleport",
+      "name": "Teleport",
+      "description": "Allows you to teleport toward where you aim every 6-2.5 seconds",
+      "trigger": "PlayerUltimate",
+      "max_level": 8,
+      "required_level": 8,
+      "cooldowns": [6.0, 5.5, 5.0, 4.5, 4.0, 3.5, 3.0, 2.5],
+      "actions": [
+        {
+          "type": "teleport",
+          "target": "self",
+          "level_values": {
+            "range": [2000, 2200, 2500, 3000, 3500, 4000, 4500, 5000]
+          },
+          "params": {
+            "mode": "safe",
+            "push_factor": 1.8
+          }
+        }
+      ]
+    }
+  ]
+}

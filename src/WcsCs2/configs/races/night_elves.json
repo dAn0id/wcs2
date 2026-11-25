@@ -1,0 +1,168 @@
+{
+  "key": "night_elves",
+  "name": "Night Elf",
+  "author": "Kryptonite & Manifest",
+  "description": "An elf descendant from Teldrassil",
+  "required_level": 0,
+  "max_level": 0,
+  "team_limit": 0,
+  "restrict_team": 0,
+  "categories": [
+    "Standard races",
+    "All races"
+  ],
+  "spawn_actions": [
+    {
+      "type": "beam_ring",
+      "target": "self",
+      "delay": 0.2,
+      "params": {
+        "radius": 110,
+        "r": 175,
+        "g": 175,
+        "b": 255,
+        "width": 5,
+        "duration": 2.0,
+        "z_offset": 20,
+        "count": 2,
+        "z_step": 10
+      }
+    }
+  ],
+  "skills": [
+    {
+      "key": "evasion",
+      "name": "Evasion",
+      "description": "You have 5-20% chance of evading an incoming attack",
+      "trigger": "PlayerSpawn",
+      "max_level": 8,
+      "required_level": 0,
+      "actions": [
+        {
+          "type": "evasion",
+          "target": "self",
+          "level_values": {
+            "chance": [5, 7, 9, 12, 15, 17, 19, 20]
+          },
+          "params": {
+            "duration": 0,
+            "message": "Evasion - You have {chance}% chance to dodge attacks."
+          }
+        }
+      ]
+    },
+    {
+      "key": "thorns_aura",
+      "name": "Thorns aura",
+      "description": "1-8% Chance to reflect 5-8 to 12-15 damage to the enemy who shot at you",
+      "trigger": "PlayerVictim",
+      "max_level": 8,
+      "required_level": 0,
+      "chances": [1, 2, 3, 4, 5, 6, 7, 8],
+      "actions": [
+        {
+          "type": "reflect_damage",
+          "target": "attacker",
+          "level_values": {
+            "min_damage": [5, 6, 7, 9, 9, 11, 11, 12],
+            "max_damage": [8, 9, 10, 12, 13, 13, 14, 15]
+          },
+          "params": {
+            "center_message": "Thorns did {damage} damage to {attacker}!",
+            "attacker_message": "Took {damage} mirror damage from {victim}'s thorns!"
+          }
+        },
+        {
+          "type": "beam",
+          "target": "attacker",
+          "params": {
+            "from": "victim",
+            "to": "attacker",
+            "r": 175,
+            "g": 175,
+            "b": 255,
+            "width": 5,
+            "duration": 1.0,
+            "z_offset": 15
+          }
+        }
+      ]
+    },
+    {
+      "key": "trueshot_aura",
+      "name": "Trueshot aura",
+      "description": "5-15% Chance to deal 5-8 to 18-21 extra damage",
+      "trigger": "PlayerAttacker",
+      "max_level": 8,
+      "required_level": 0,
+      "chances": [5, 7, 9, 11, 12, 13, 14, 15],
+      "actions": [
+        {
+          "type": "bonus_damage",
+          "target": "victim",
+          "level_values": {
+            "min_damage": [5, 7, 11, 12, 13, 15, 17, 18],
+            "max_damage": [8, 11, 14, 15, 16, 18, 20, 21]
+          },
+          "params": {
+            "center_message": "Trueshot aura did + {damage} damage!"
+          }
+        },
+        {
+          "type": "beam",
+          "target": "victim",
+          "params": {
+            "from": "attacker",
+            "to": "victim",
+            "r": 175,
+            "g": 175,
+            "b": 255,
+            "width": 5,
+            "duration": 1.0,
+            "z_offset": 20
+          }
+        },
+        {
+          "type": "beam_ring",
+          "target": "victim",
+          "params": {
+            "radius": 40,
+            "r": 175,
+            "g": 175,
+            "b": 255,
+            "width": 5,
+            "duration": 1.0,
+            "z_offset": 10,
+            "count": 2,
+            "z_step": 20
+          }
+        }
+      ]
+    },
+    {
+      "key": "entangling_roots",
+      "name": "Entangling roots",
+      "description": "Roots every enemy within 225-400 range making them unable to move for 2-3 seconds",
+      "trigger": "PlayerUltimate",
+      "max_level": 8,
+      "required_level": 8,
+      "cooldowns": [30],
+      "actions": [
+        {
+          "type": "aoe_freeze",
+          "target": "nearby_enemies",
+          "level_values": {
+            "radius": [225, 250, 275, 300, 325, 350, 375, 400],
+            "duration": [2.0, 2.2, 2.35, 2.5, 2.6, 2.75, 2.9, 3.0]
+          },
+          "params": {
+            "max_targets": 20,
+            "respect_immunity": true,
+            "beam_color": [0, 160, 0],
+            "ring_color": [0, 180, 0]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,108 @@
+[
+  {
+    "key": "belt_of_vitality",
+    "name": "Belt of Vitality",
+    "description": "Slowly regenerates your health back to your maximum health",
+    "category": "Shop",
+    "cost": 2000,
+    "required_level": 0,
+    "buy_mode": 1,
+    "duration": 1,
+    "max_count": 1,
+    "trigger": "PlayerSpawn",
+    "actions": [
+      {
+        "type": "regen",
+        "target": "self",
+        "delay": 2.0,
+        "params": {
+          "amount": 2,
+          "interval": 1.0,
+          "max_cap": 0,
+          "radius": 0,
+          "tag": "belt_of_vitality"
+        }
+      },
+      {
+        "type": "message",
+        "target": "self",
+        "delay": 2.0,
+        "params": {
+          "text": "Belt of Vitality - Slowly regenerating your health back to maximum."
+        }
+      }
+    ]
+  },
+  {
+    "key": "boots_of_speed",
+    "name": "Boots of Speed",
+    "description": "Increases your speed by 25% of the base speed",
+    "category": "Shop",
+    "cost": 2500,
+    "required_level": 0,
+    "buy_mode": 1,
+    "duration": 1,
+    "max_count": 1,
+    "trigger": "PlayerSpawn",
+    "actions": [
+      {
+        "type": "speed",
+        "target": "self",
+        "params": {
+          "value": 0.25,
+          "mode": "add",
+          "source": "boots_of_speed",
+          "message": "Boots of Speed - Increased your speed by 25%."
+        }
+      }
+    ]
+  },
+  {
+    "key": "gem_of_life",
+    "name": "Gem of Life",
+    "description": "Grants you an additional 50 health",
+    "category": "Shop",
+    "cost": 2000,
+    "required_level": 0,
+    "buy_mode": 1,
+    "duration": 1,
+    "max_count": 1,
+    "trigger": "PlayerSpawn",
+    "actions": [
+      {
+        "type": "health",
+        "target": "self",
+        "delay": 0.2,
+        "params": {
+          "amount": 50,
+          "mode": "add",
+          "update_max_health": true,
+          "message": "Gem of Life - You received 50 more health."
+        }
+      }
+    ]
+  },
+  {
+    "key": "rune_of_wisdom",
+    "name": "Rune of Wisdom",
+    "description": "Grants you 1 or 2 levels (33% chance to get 2 levels)",
+    "category": "Shop",
+    "cost": 16000,
+    "required_level": 0,
+    "buy_mode": 2,
+    "duration": 0,
+    "max_count": 999,
+    "trigger": "PlayerBuy",
+    "actions": [
+      {
+        "type": "give_levels",
+        "target": "self",
+        "params": {
+          "levels": 1,
+          "bonus_chance": 33,
+          "bonus_levels": 2
+        }
+      }
+    ]
+  }
+]

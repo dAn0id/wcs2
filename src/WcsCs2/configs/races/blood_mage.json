@@ -1,0 +1,197 @@
+{
+  "key": "blood_mage",
+  "name": "Blood Mage",
+  "author": "Kryptonite & Manifest",
+  "description": "A blood mage filled with magical powers",
+  "required_level": 30,
+  "max_level": 0,
+  "team_limit": 0,
+  "restrict_team": 0,
+  "categories": [
+    "Standard races",
+    "All races"
+  ],
+  "spawn_actions": [
+    {
+      "type": "beam_ring",
+      "target": "self",
+      "params": {
+        "radius": 110,
+        "r": 145,
+        "g": 145,
+        "b": 255,
+        "width": 6,
+        "duration": 2.5,
+        "z_offset": 20,
+        "count": 2,
+        "z_step": 10
+      }
+    }
+  ],
+  "skills": [
+    {
+      "key": "phoenix",
+      "name": "Phoenix",
+      "description": "You have 15-90% chance of reviving the first teammate who dies this round",
+      "trigger": "PlayerSpawn",
+      "max_level": 6,
+      "required_level": 0,
+      "chances": [15, 30, 45, 60, 75, 90],
+      "custom_handler": "blood_mage_phoenix"
+    },
+    {
+      "key": "banish",
+      "name": "Banish",
+      "description": "10% Chance to banish the enemy causing their view to be distorted for 1-3 seconds",
+      "trigger": "PlayerAttacker",
+      "max_level": 6,
+      "required_level": 0,
+      "chances": [10],
+      "actions": [
+        {
+          "type": "fade",
+          "target": "victim",
+          "level_values": {
+            "duration": [1.0, 1.4, 1.8, 2.2, 2.6, 3.0]
+          },
+          "params": {
+            "r": 60,
+            "g": 200,
+            "b": 210,
+            "a": 175,
+            "hold_ratio": 0.7,
+            "shake_amplitude": 6,
+            "shake_frequency": 10,
+            "attacker_message": "Banish - You banished {victim} for {duration} seconds!",
+            "victim_message": "Banish - You have been banished for {duration} seconds by {attacker}."
+          }
+        },
+        {
+          "type": "beam",
+          "target": "victim",
+          "params": {
+            "from": "attacker",
+            "to": "victim",
+            "r": 100,
+            "g": 255,
+            "b": 248,
+            "width": 5,
+            "duration": 0.5,
+            "z_offset": 20
+          }
+        }
+      ]
+    },
+    {
+      "key": "siphon_mana",
+      "name": "Siphon mana",
+      "description": "Upon damaging an enemy you have 8% chance to steal 50-175 cash (mana) from them",
+      "trigger": "PlayerAttacker",
+      "max_level": 6,
+      "required_level": 0,
+      "chances": [8],
+      "actions": [
+        {
+          "type": "steal_cash",
+          "target": "victim",
+          "level_values": {
+            "amount": [50, 75, 100, 125, 150, 175]
+          },
+          "params": {
+            "attacker_message": "Siphon mana - You stole ${amount} from {victim}!",
+            "victim_message": "Siphon mana - {attacker} stole ${amount} of your cash!"
+          }
+        },
+        {
+          "type": "beam",
+          "target": "victim",
+          "params": {
+            "from": "attacker",
+            "to": "victim",
+            "r": 100,
+            "g": 255,
+            "b": 248,
+            "width": 5,
+            "duration": 0.7,
+            "z_offset": 20
+          }
+        }
+      ]
+    },
+    {
+      "key": "flame_strike",
+      "name": "Flame strike",
+      "description": "When attacking your enemy you have 5-15% chance to set the target on fire for 3 seconds",
+      "trigger": "PlayerAttacker",
+      "max_level": 6,
+      "required_level": 0,
+      "chances": [5, 7, 9, 11, 13, 15],
+      "actions": [
+        {
+          "type": "burn_dot",
+          "target": "victim",
+          "params": {
+            "duration": 3.0,
+            "damage_per_tick": 4,
+            "interval": 0.5,
+            "prevent_stack_key": "is_burning",
+            "color": [232, 111, 0],
+            "attacker_message": "Flame Strike - Made {victim} burst into flames!",
+            "victim_message": "Flame Strike - {attacker} set you on fire!"
+          }
+        },
+        {
+          "type": "beam",
+          "target": "victim",
+          "params": {
+            "from": "attacker",
+            "to": "victim",
+            "r": 232,
+            "g": 111,
+            "b": 0,
+            "width": 5,
+            "duration": 0.7,
+            "z_offset": 20
+          }
+        }
+      ]
+    },
+    {
+      "key": "curing_ritual",
+      "name": "Curing ritual",
+      "description": "Sacrifice $100 cash (mana) to gain 15-25 health (usable at or below 175 HP)",
+      "trigger": "PlayerUltimate",
+      "max_level": 6,
+      "required_level": 8,
+      "cooldowns": [15, 14, 13, 12, 11, 10],
+      "actions": [
+        {
+          "type": "cash_to_health",
+          "target": "self",
+          "level_values": {
+            "amount": [15, 17, 19, 21, 23, 25]
+          },
+          "params": {
+            "cost": 100,
+            "max_hp_threshold": 175
+          }
+        },
+        {
+          "type": "beam_ring",
+          "target": "self",
+          "params": {
+            "radius": 55,
+            "r": 255,
+            "g": 235,
+            "b": 120,
+            "width": 6,
+            "duration": 1.2,
+            "z_offset": 25,
+            "count": 2,
+            "z_step": 10
+          }
+        }
+      ]
+    }
+  ]
+}

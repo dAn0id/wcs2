@@ -1,0 +1,166 @@
+{
+  "key": "orcish_horde",
+  "name": "Orcish Horde",
+  "author": "Kryptonite & Manifest",
+  "description": "Fighting for survival in their adopted world",
+  "required_level": 0,
+  "max_level": 0,
+  "team_limit": 0,
+  "restrict_team": 0,
+  "categories": [
+    "Standard races",
+    "All races"
+  ],
+  "spawn_actions": [
+    {
+      "type": "give_weapon",
+      "target": "self",
+      "delay": 0.1,
+      "params": {
+        "weapon": "weapon_hegrenade"
+      }
+    },
+    {
+      "type": "beam_ring",
+      "target": "self",
+      "params": {
+        "radius": 70,
+        "r": 252,
+        "g": 70,
+        "b": 35,
+        "width": 6,
+        "duration": 1.5,
+        "z_offset": 20,
+        "count": 2,
+        "z_step": 18
+      }
+    }
+  ],
+  "skills": [
+    {
+      "key": "critical_strike",
+      "name": "Critical strike",
+      "description": "10% Chance to deal 5-8 to 20-25 extra damage when attacking an enemy",
+      "trigger": "PlayerAttacker",
+      "max_level": 8,
+      "required_level": 0,
+      "chances": [10],
+      "actions": [
+        {
+          "type": "bonus_damage",
+          "target": "victim",
+          "level_values": {
+            "min_damage": [5, 8, 11, 14, 17, 19, 20, 20],
+            "max_damage": [8, 11, 14, 17, 20, 22, 23, 25]
+          },
+          "params": {
+            "center_message": "Critical strike did + {damage} damage!"
+          }
+        },
+        {
+          "type": "beam",
+          "target": "victim",
+          "params": {
+            "from": "attacker",
+            "to": "victim",
+            "r": 255,
+            "g": 71,
+            "b": 36,
+            "width": 5,
+            "duration": 0.5,
+            "z_offset": 20
+          }
+        }
+      ]
+    },
+    {
+      "key": "critical_grenade",
+      "name": "Critical grenade",
+      "description": "Grenades will always deal an additional 10-20 to 45-55 damage",
+      "trigger": "PlayerAttacker",
+      "max_level": 8,
+      "required_level": 0,
+      "weapons": ["weapon_hegrenade"],
+      "actions": [
+        {
+          "type": "bonus_damage",
+          "target": "victim",
+          "level_values": {
+            "min_damage": [10, 15, 20, 25, 30, 35, 40, 45],
+            "max_damage": [20, 25, 30, 35, 40, 45, 50, 55]
+          },
+          "params": {
+            "weapon_hint": "hegrenade",
+            "center_message": "Critical grenade dealt + {damage} damage!",
+            "victim_message": "Critical grenade - You received {damage} additional damage!"
+          }
+        },
+        {
+          "type": "beam_ring",
+          "target": "victim",
+          "params": {
+            "radius": 35,
+            "r": 255,
+            "g": 71,
+            "b": 36,
+            "width": 5,
+            "duration": 0.75,
+            "z_offset": 15,
+            "count": 3,
+            "z_step": 20
+          }
+        }
+      ]
+    },
+    {
+      "key": "reincarnation",
+      "name": "Reincarnation",
+      "description": "Grants you a 15-35% chance of respawning where you died",
+      "trigger": "PlayerDeath",
+      "max_level": 8,
+      "required_level": 0,
+      "chances": [15, 20, 24, 27, 30, 32, 34, 35],
+      "actions": [
+        {
+          "type": "respawn",
+          "target": "self",
+          "params": {
+            "delay": 3.0,
+            "at_death_origin": true,
+            "restore_weapons": false,
+            "countdown": true,
+            "ring_color": [255, 71, 36]
+          }
+        }
+      ]
+    },
+    {
+      "key": "chain_lightning",
+      "name": "Chain lightning",
+      "description": "Discharges a bolt of lightning hitting up to 4 nearby enemies within 400-750 range for 35 damage each",
+      "trigger": "PlayerUltimate",
+      "max_level": 8,
+      "required_level": 8,
+      "cooldowns": [15],
+      "actions": [
+        {
+          "type": "aoe_damage",
+          "target": "nearby_enemies",
+          "level_values": {
+            "radius": [400, 450, 500, 550, 600, 650, 700, 750],
+            "max_targets": [2, 2, 2, 3, 3, 3, 4, 4]
+          },
+          "params": {
+            "damage": 35,
+            "respect_immunity": true,
+            "refund_if_none": true,
+            "draw_beams": true,
+            "draw_rings": false,
+            "beam_color": [160, 160, 230],
+            "weapon_hint": "taser"
+          }
+        }
+      ]
+    }
+  ]
+}

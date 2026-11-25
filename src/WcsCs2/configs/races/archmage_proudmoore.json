@@ -1,0 +1,132 @@
+{
+  "key": "archmage_proudmoore",
+  "name": "Archmage Proudmoore",
+  "author": "Fast.Food & Manifest",
+  "description": "A powerful archmage of the Proudmoore family",
+  "required_level": 0,
+  "max_level": 0,
+  "team_limit": 0,
+  "restrict_team": 0,
+  "categories": [
+    "Standard races",
+    "All races"
+  ],
+  "spawn_actions": [
+    {
+      "type": "beam_ring",
+      "target": "self",
+      "params": {
+        "radius": 90,
+        "r": 255,
+        "g": 235,
+        "b": 80,
+        "width": 6,
+        "duration": 2.0,
+        "z_offset": 15,
+        "count": 2,
+        "z_step": 15
+      }
+    }
+  ],
+  "skills": [
+    {
+      "key": "earthquake",
+      "name": "Earthquake",
+      "description": "2-10% Chance to shake your enemy for a short duration when you attack",
+      "trigger": "PlayerAttacker",
+      "max_level": 6,
+      "required_level": 0,
+      "chances": [2, 4, 6, 8, 9, 10],
+      "actions": [
+        {
+          "type": "shake",
+          "target": "victim",
+          "params": {
+            "amplitude": 15,
+            "frequency": 13,
+            "duration": 3.0,
+            "attacker_message": "Earthquake caused {victim} to shake!",
+            "victim_message": "{attacker} struck you with his earthquake!"
+          }
+        },
+        {
+          "type": "beam",
+          "target": "victim",
+          "params": {
+            "from": "attacker",
+            "to": "victim",
+            "r": 251,
+            "g": 255,
+            "b": 100,
+            "width": 5,
+            "duration": 1.5,
+            "z_offset": 20
+          }
+        }
+      ]
+    },
+    {
+      "key": "broom_of_velocity",
+      "name": "Broom of velocity",
+      "description": "Broom of velocity grants you 10-35% more movement and fly speed",
+      "trigger": "PlayerSpawn",
+      "max_level": 6,
+      "required_level": 0,
+      "actions": [
+        {
+          "type": "speed",
+          "target": "self",
+          "level_values": {
+            "value": [1.10, 1.15, 1.20, 1.25, 1.30, 1.35]
+          },
+          "params": {
+            "mode": "set",
+            "source": "broom_of_velocity",
+            "message": "Broom of velocity - Granted you {pct}% increased movement speed."
+          }
+        }
+      ]
+    },
+    {
+      "key": "weapon_of_the_sorcerer",
+      "name": "Weapon of the sorcerer",
+      "description": "30-60% Chance to receive a Desert Eagle and M4A1 upon spawning",
+      "trigger": "PlayerSpawn",
+      "max_level": 6,
+      "required_level": 0,
+      "chances": [30, 40, 45, 50, 55, 60],
+      "actions": [
+        {
+          "type": "give_weapon",
+          "target": "self",
+          "delay": 0.25,
+          "params": {
+            "weapons": ["weapon_deagle", "weapon_m4a1"],
+            "strip_primary": true,
+            "strip_secondary": true,
+            "message": "Weapon of the sorcerer - Gave you a Deagle and an M4A1."
+          }
+        }
+      ]
+    },
+    {
+      "key": "lift_off",
+      "name": "Lift off",
+      "description": "You can fly; while flying you receive 5-20 additional health",
+      "trigger": "PlayerUltimate",
+      "max_level": 6,
+      "required_level": 8,
+      "cooldowns": [6, 5, 4, 3, 2, 1],
+      "custom_handler": "archmage_lift_off",
+      "actions": [
+        {
+          "type": "health",
+          "target": "self",
+          "level_values": {
+            "bonus_hp": [5, 9, 12, 15, 18, 20]
+          }
+        }
+      ]
+    }
+  ]
+}
