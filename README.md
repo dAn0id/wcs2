@@ -1,3 +1,5 @@
+![Warcraft Source — WCS for CS2](assets/banner.jpg)
+
 # WcsCs2 — Warcraft:Source for Counter-Strike 2
 
 A data-driven **CounterStrikeSharp** (`.NET 10.0`) port of **Warcraft:Source (WCS)** for **Counter-Strike 2 Linux x64** dedicated servers.
