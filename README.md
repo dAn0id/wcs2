@@ -1,6 +1,6 @@
 ![Warcraft Source — WCS for CS2](assets/banner.jpg)
 
-# WcsCs2 — Warcraft:Source for Counter-Strike 2
+# WCS2 — Warcraft:Source for Counter-Strike 2
 
 A data-driven **CounterStrikeSharp** (`.NET 10.0`) port of **Warcraft:Source (WCS)** for **Counter-Strike 2 Linux x64** dedicated servers.
 
@@ -22,18 +22,18 @@ A data-driven **CounterStrikeSharp** (`.NET 10.0`) port of **Warcraft:Source (WC
 
 ## Setup
 
-For server administrators deploying `WcsCs2` on a **CS2 Linux x64** dedicated server using a prebuilt GitHub Release.
+For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated server using a prebuilt GitHub Release.
 
 ### 1. Prerequisites (Linux x64 CS2 Server)
 
-- **Counter-Strike 2 Dedicated Server** on **Linux x86_64**
-- **Metamod:Source** `2.x` (`game/csgo/addons/metamod/` registered in `game/csgo/gameinfo.gi`)
-- **CounterStrikeSharp** `v1.0.381+` (**`with-runtime` Linux x64** release bundling the **.NET 10.0** runtime)
-- **CS2MenuManager** `v1.0.43+` extracted to `game/csgo/addons/counterstrikesharp/shared/CS2MenuManager/`
+- **[Counter-Strike 2 Dedicated Server](https://developer.valvesoftware.com/wiki/Counter-Strike_2/Dedicated_Servers)** on **Linux x86_64**
+- **[Metamod:Source](https://www.sourcemm.net/downloads.php?branch=master)** `2.x` (`game/csgo/addons/metamod/` registered in `game/csgo/gameinfo.gi`)
+- **[CounterStrikeSharp](https://github.com/roflmuffin/CounterStrikeSharp/releases)** `v1.0.381+` (**`with-runtime` Linux x64** release bundling the **.NET 10.0** runtime)
+- **[CS2MenuManager](https://github.com/schwarper/CS2MenuManager/releases)** `v1.0.43+` extracted to `game/csgo/addons/counterstrikesharp/shared/CS2MenuManager/`
 
 ### 2. Download & Extract Prebuilt Release
 
-1. Download the latest `WcsCs2-v*-linux-x64.zip` (or `.tar.gz`) archive from **[GitHub Releases](https://github.com/dAn0id/wcs2/releases)**.
+1. Download the latest `WCS2-v1.0.1-linux-x64.zip` (or `.tar.gz`) archive from **[GitHub Releases](https://github.com/dAn0id/wcs2/releases)**.
 2. Extract it into `game/csgo/addons/counterstrikesharp/plugins/` so the directory layout looks like:
    ```text
    game/csgo/addons/counterstrikesharp/
@@ -43,9 +43,9 @@ For server administrators deploying `WcsCs2` on a **CS2 Linux x64** dedicated se
    │       ├── CS2MenuManager.deps.json
    │       └── config.toml
    └── plugins/
-       └── WcsCs2/
-           ├── WcsCs2.dll
-           ├── WcsCs2.deps.json
+       └── WCS2/
+           ├── WCS2.dll
+           ├── WCS2.deps.json
            ├── Dapper.dll
            ├── Microsoft.Data.Sqlite.dll
            ├── SQLitePCLRaw.batteries_v2.dll
@@ -70,13 +70,13 @@ For server administrators deploying `WcsCs2` on a **CS2 Linux x64** dedicated se
            │       ├── undead_scourge.json
            │       └── warden.json
            └── data/                      # Auto-created on first boot
-               └── wcs_cs2.sqlite         # Fresh WAL-mode SQLite DB
+               └── wcs2.sqlite            # Fresh WAL-mode SQLite DB
    ```
-3. Ensure all files are owned by the Linux user running your CS2 server (e.g. `chown -R <server-user>:<server-user> plugins/WcsCs2`).
+3. Ensure all files are owned by the Linux user running your CS2 server (e.g. `chown -R <server-user>:<server-user> plugins/WCS2`).
 
 ### 3. Configure Admins
 
-`WcsCs2` grants access to `!wcsadmin`, `wcs_reload`, and `wcs_tracetest` via **either** of two methods (you can use one or both):
+`WCS2` grants access to `!wcsadmin`, `wcs_reload`, and `wcs_tracetest` via **either** of two methods (you can use one or both):
 
 1. **CounterStrikeSharp `admins.json` (Recommended):**
    Create/edit `game/csgo/addons/counterstrikesharp/configs/admins.json` and grant `@css/root` or `@wcs/admin`:
@@ -92,7 +92,7 @@ For server administrators deploying `WcsCs2` on a **CS2 Linux x64** dedicated se
      }
    }
    ```
-2. **Plugin config `plugins/WcsCs2/configs/wcs.json` (`admin_steam_ids`):**
+2. **Plugin config `plugins/WCS2/configs/wcs.json` (`admin_steam_ids`):**
    Replace the placeholder `76561197960265728` in `admin_steam_ids` with your own 17-digit **SteamID64** integer(s) (look up your SteamID64 via e.g. [steamid.io](https://steamid.io/)):
    ```json
    "admin_steam_ids": [
@@ -104,7 +104,7 @@ For server administrators deploying `WcsCs2` on a **CS2 Linux x64** dedicated se
 
 - **`configs/wcs.json`**: XP rates (`xp_interval`, `kill_xp`, `headshot_xp`, `knife_xp`, `round_win_xp`, etc.), Rested XP intervals, Level Bank new-player bonus, bot race behavior, menu style (`wasd`, `html`, `chat`, `console`), `allow_inspect_ultimate_bind`, `use_native_trace` (kill-switch for Source 2 native physics tracing; falls back to safe managed teleport when `false`), and stock CS2 model paths.
 - **`configs/gamedata.json`**: Controls how `Source2TraceEngine` resolves CS2 Linux x64 physics symbols (`TraceShape`, `GameTraceManager`, `CTraceFilter` vtable):
-  - `"resolution_mode": "auto"` *(default)* — Automatically resolves all 3 symbols directly from `libserver.so` ELF64 metadata on disk (Itanium RTTI for `12CTraceFilter`, VProf string xref + `.eh_frame_hdr`/prologue for `"Physics/TraceShape (Server)"`, and caller consensus for `GameTraceManager`) so `WcsCs2` survives CS2 compiler updates without recompiling. Any symbol that cannot be resolved dynamically falls back to `linux_signatures` in `gamedata.json`.
+  - `"resolution_mode": "auto"` *(default)* — Automatically resolves all 3 symbols directly from `libserver.so` ELF64 metadata on disk (Itanium RTTI for `12CTraceFilter`, VProf string xref + `.eh_frame_hdr`/prologue for `"Physics/TraceShape (Server)"`, and caller consensus for `GameTraceManager`) so `WCS2` survives CS2 compiler updates without recompiling. Any symbol that cannot be resolved dynamically falls back to `linux_signatures` in `gamedata.json`.
   - `"resolution_mode": "dynamic"` — Dynamic ELF64 resolution only.
   - `"resolution_mode": "gamedata"` — Uses only `linux_signatures` from `gamedata.json` (admin override without recompiling).
 - **`configs/items.json`**: Shop item pricing, buy limits, duration, and action lists.
@@ -118,12 +118,12 @@ For server administrators deploying `WcsCs2` on a **CS2 Linux x64** dedicated se
 
 Restart your CS2 server and verify in the server console / RCON:
 - `meta list` -> `CounterStrikeSharp` loaded
-- `css_plugins list` -> `[#1:LOADED]: "WcsCs2" (1.0.0)`
+- `css_plugins list` -> `[#1:LOADED]: "WCS2" (1.0.1)`
 - Server startup logs confirm:
-  - `Loaded 12 races across 3 categories.`
-  - `Loaded 4 shop items.`
-  - `SQLite database initialized cleanly.`
-  - `Source2TraceEngine initialized cleanly (mode=auto): TraceShape=[dynamic-elf] ..., GTM*=[dynamic-elf] ..., FilterVtable=[dynamic-elf] ...`
+  - `[WCS2] Loaded 12 races across 3 categories.`
+  - `[WCS2] Loaded 4 shop items.`
+  - `[WCS2] SQLite database initialized cleanly.`
+  - `[WCS2] Source2TraceEngine initialized cleanly (mode=auto): TraceShape=[dynamic-elf] ..., GTM*=[dynamic-elf] ..., FilterVtable=[dynamic-elf] ...`
 
 ### 6. In-Game Commands & Keybinds
 
@@ -159,28 +159,28 @@ bind c ability
 
 ## Build
 
-For developers compiling `WcsCs2` from source.
+For developers compiling `WCS2` from source.
 
 ### Prerequisites
-- **.NET 10.0 SDK** (`dotnet --version` -> `10.0.x`)
+- **[.NET 10.0 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)** (`dotnet --version` -> `10.0.x`)
 
 ### Compile & Publish (Linux x64)
 ```bash
 # Restore & build Release
-dotnet build -c Release src/WcsCs2.sln
+dotnet build -c Release src/WCS2.sln
 
 # Publish ready-to-deploy Linux x64 plugin bundle
-dotnet publish src/WcsCs2/WcsCs2.csproj -c Release -r linux-x64 --no-self-contained -o publish/WcsCs2
+dotnet publish src/WCS2/WCS2.csproj -c Release -r linux-x64 --no-self-contained -o publish/WCS2
 ```
 
-Publishing with `-r linux-x64 --no-self-contained` is required so `Microsoft.Data.Sqlite` bundles the Linux x64 native `libe_sqlite3.so` binary alongside `WcsCs2.dll`, `Dapper.dll`, `SQLitePCLRaw.*.dll`, and the default `configs/` directory (while keeping `CounterStrikeSharp.API` and `CS2MenuManager` runtime-excluded so they resolve from CounterStrikeSharp's `api/` and `shared/` folders).
+Publishing with `-r linux-x64 --no-self-contained` is required so `Microsoft.Data.Sqlite` bundles the Linux x64 native `libe_sqlite3.so` binary alongside `WCS2.dll`, `Dapper.dll`, `SQLitePCLRaw.*.dll`, and the default `configs/` directory (while keeping `CounterStrikeSharp.API` and `CS2MenuManager` runtime-excluded so they resolve from CounterStrikeSharp's `api/` and `shared/` folders).
 
 ### Project Structure
 
-- `src/WcsCs2/Config/` — Strongly typed JSON config models (`wcs.json`, `gamedata.json`, `items.json`, `races/*.json`)
-- `src/WcsCs2/Core/` — Sessions, player state management, progression/XP/bank, shop, bots, race registry
-- `src/WcsCs2/Data/` — Async WAL-mode SQLite repository
-- `src/WcsCs2/Services/` — Combat/damage hooks, weapons/restrictions, visual/audio effects, ELF64 symbol resolver, Source 2 collision tracer & teleportation
-- `src/WcsCs2/Skills/` — Skill execution engine, composable `Primitives/`, and `CustomHandlers/`
-- `src/WcsCs2/Menus/` — `CS2MenuManager` menu flows
-- `src/WcsCs2/configs/` — Default server config, gamedata, 4 shop items, and 12 race definitions
+- `src/WCS2/Config/` — Strongly typed JSON config models (`wcs.json`, `gamedata.json`, `items.json`, `races/*.json`)
+- `src/WCS2/Core/` — Sessions, player state management, progression/XP/bank, shop, bots, race registry
+- `src/WCS2/Data/` — Async WAL-mode SQLite repository
+- `src/WCS2/Services/` — Combat/damage hooks, weapons/restrictions, visual/audio effects, ELF64 symbol resolver, Source 2 collision tracer & teleportation
+- `src/WCS2/Skills/` — Skill execution engine, composable `Primitives/`, and `CustomHandlers/`
+- `src/WCS2/Menus/` — `CS2MenuManager` menu flows
+- `src/WCS2/configs/` — Default server config, gamedata, 4 shop items, and 12 race definitions

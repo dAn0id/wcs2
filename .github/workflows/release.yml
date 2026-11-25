@@ -1,4 +1,4 @@
-name: Release WcsCs2 (Linux x64)
+name: Release WCS2 (Linux x64)
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag name (e.g. v1.0.0)'
+        description: 'Release tag name (e.g. v1.0.1)'
         required: false
         type: string
 
@@ -38,7 +38,7 @@ jobs:
             TAG="${GITHUB_REF_NAME}"
           fi
           if [[ ! "${TAG}" =~ ^v[0-9] ]]; then
-            echo "::error::Release tag must start with 'v' followed by a version number (e.g. v1.0.0). Got: '${TAG}'"
+            echo "::error::Release tag must start with 'v' followed by a version number (e.g. v1.0.1). Got: '${TAG}'"
             exit 1
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
@@ -47,30 +47,30 @@ jobs:
       - name: Restore & publish Linux x64 bundle
         shell: bash
         run: |
-          dotnet publish src/WcsCs2/WcsCs2.csproj \
+          dotnet publish src/WCS2/WCS2.csproj \
             -c Release \
             -r linux-x64 \
             --no-self-contained \
-            -o stage/WcsCs2
+            -o stage/WCS2
 
       - name: Verify published bundle integrity
         shell: bash
         run: |
           set -euo pipefail
-          test -f stage/WcsCs2/WcsCs2.dll
-          test -f stage/WcsCs2/libe_sqlite3.so
-          test -f stage/WcsCs2/Microsoft.Data.Sqlite.dll
-          test -f stage/WcsCs2/Dapper.dll
-          test -f stage/WcsCs2/configs/wcs.json
-          test -f stage/WcsCs2/configs/gamedata.json
-          test -f stage/WcsCs2/configs/items.json
-          RACE_COUNT=$(find stage/WcsCs2/configs/races -maxdepth 1 -name '*.json' | wc -l)
+          test -f stage/WCS2/WCS2.dll
+          test -f stage/WCS2/libe_sqlite3.so
+          test -f stage/WCS2/Microsoft.Data.Sqlite.dll
+          test -f stage/WCS2/Dapper.dll
+          test -f stage/WCS2/configs/wcs.json
+          test -f stage/WCS2/configs/gamedata.json
+          test -f stage/WCS2/configs/items.json
+          RACE_COUNT=$(find stage/WCS2/configs/races -maxdepth 1 -name '*.json' | wc -l)
           echo "Bundled race JSON files: ${RACE_COUNT}"
           test "${RACE_COUNT}" -ge 12
           # Ensure runtime-provided CSS / shared DLLs are NOT duplicated inside plugin folder
-          test ! -f stage/WcsCs2/CounterStrikeSharp.API.dll
-          test ! -f stage/WcsCs2/CS2MenuManager.dll
-          ls -la stage/WcsCs2 stage/WcsCs2/configs
+          test ! -f stage/WCS2/CounterStrikeSharp.API.dll
+          test ! -f stage/WCS2/CS2MenuManager.dll
+          ls -la stage/WCS2 stage/WCS2/configs
 
       - name: Package release archives
         shell: bash
@@ -79,10 +79,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          ZIP_NAME="WcsCs2-${RELEASE_TAG}-linux-x64.zip"
-          TAR_NAME="WcsCs2-${RELEASE_TAG}-linux-x64.tar.gz"
-          (cd stage && zip -rq "../dist/${ZIP_NAME}" WcsCs2)
-          tar -C stage -czf "dist/${TAR_NAME}" WcsCs2
+          ZIP_NAME="WCS2-${RELEASE_TAG}-linux-x64.zip"
+          TAR_NAME="WCS2-${RELEASE_TAG}-linux-x64.tar.gz"
+          (cd stage && zip -rq "../dist/${ZIP_NAME}" WCS2)
+          tar -C stage -czf "dist/${TAR_NAME}" WCS2
           (cd dist && sha256sum "${ZIP_NAME}" "${TAR_NAME}" > SHA256SUMS.txt)
           ls -lh dist/
           cat dist/SHA256SUMS.txt
@@ -94,21 +94,21 @@ jobs:
           RELEASE_TAG: ${{ steps.meta.outputs.tag }}
         run: |
           set -euo pipefail
-          ZIP_PATH="dist/WcsCs2-${RELEASE_TAG}-linux-x64.zip"
-          TAR_PATH="dist/WcsCs2-${RELEASE_TAG}-linux-x64.tar.gz"
+          ZIP_PATH="dist/WCS2-${RELEASE_TAG}-linux-x64.zip"
+          TAR_PATH="dist/WCS2-${RELEASE_TAG}-linux-x64.tar.gz"
           SUMS_PATH="dist/SHA256SUMS.txt"
 
           NOTES=$(cat <<EOF
-          ## WcsCs2 ${RELEASE_TAG} (Linux x64)
+          ## WCS2 ${RELEASE_TAG} (Linux x64)
 
           Prebuilt CounterStrikeSharp plugin bundle for **Counter-Strike 2 Linux x86_64 dedicated servers** (CounterStrikeSharp \`v1.0.381+\` with \`.NET 10.0\` runtime + \`CS2MenuManager v1.0.43+\`).
 
           ### Quick Install
           1. Ensure **Metamod:Source 2.0**, **CounterStrikeSharp \`v1.0.381+\`** (\`with-runtime\`), and **\`CS2MenuManager\`** (\`shared/CS2MenuManager/\`) are installed.
-          2. Extract \`WcsCs2-${RELEASE_TAG}-linux-x64.zip\` (or \`.tar.gz\`) directly into:
+          2. Extract \`WCS2-${RELEASE_TAG}-linux-x64.zip\` (or \`.tar.gz\`) directly into:
              \`game/csgo/addons/counterstrikesharp/plugins/\`
-             so that \`plugins/WcsCs2/WcsCs2.dll\`, \`libe_sqlite3.so\`, and \`configs/\` are created cleanly.
-          3. Configure admins in \`addons/counterstrikesharp/configs/admins.json\` (or \`plugins/WcsCs2/configs/wcs.json\` -> \`admin_steam_ids\`).
+             so that \`plugins/WCS2/WCS2.dll\`, \`libe_sqlite3.so\`, and \`configs/\` are created cleanly.
+          3. Configure admins in \`addons/counterstrikesharp/configs/admins.json\` (or \`plugins/WCS2/configs/wcs.json\` -> \`admin_steam_ids\`).
           4. Restart your CS2 server and verify \`css_plugins list\`.
 
           See the [README Setup Guide](https://github.com/${GITHUB_REPOSITORY}#setup) for full details.
@@ -120,6 +120,6 @@ jobs:
           else
             gh release create "${RELEASE_TAG}" \
               "${ZIP_PATH}" "${TAR_PATH}" "${SUMS_PATH}" \
-              --title "WcsCs2 ${RELEASE_TAG} (Linux x64)" \
+              --title "WCS2 ${RELEASE_TAG} (Linux x64)" \
               --notes "${NOTES}"
           fi

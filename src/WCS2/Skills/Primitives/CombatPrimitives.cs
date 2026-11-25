@@ -1,0 +1,520 @@
+using System.Drawing;
+using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Modules.Utils;
+using WCS2.Config;
+
+namespace WCS2.Skills.Primitives;
+
+public sealed class BonusDamagePrimitive : ISkillPrimitive
+{
+    public string Type => "bonus_damage";
+
+    public void Execute(SkillContext ctx, SkillActionConfig action)
+    {
+        var victim = ctx.ResolveSingleTarget(action.Target == "self" ? "victim" : action.Target);
+        if (!SkillHelpers.IsAlive(victim) || !SkillHelpers.IsAlive(ctx.Owner))
+            return;
+
+        float damage = ResolveDamage(ctx, action);
+        if (damage <= 0f) return;
+
+        bool ignoreArmor = action.GetBool("ignore_armor", false);
+        string weaponHint = action.GetString("weapon_hint", string.IsNullOrEmpty(ctx.WeaponName) ? "world" : ctx.WeaponName);
+
+        // If inside OnPlayerTakeDamagePre with DamageInfo, fold directly into BonusDamage if not ignoring armor,
+        // otherwise apply clean skill damage so kill attribution and damage numbers work reliably.
+        if (ctx.DamageInfo != null && !ignoreArmor && victim!.Slot == ctx.Victim?.Slot)
+        {
+            ctx.BonusDamage += damage;
+        }
+        else
+        {
+            ctx.Services.Combat.DealDamage(victim!, ctx.Owner, damage, weaponHint, ignoreArmor: ignoreArmor, isSkillDamage: true);
+        }
+
+        string dmgText = ((int)Math.Round(damage)).ToString();
+        string centerMsg = action.GetString("center_message");
+        if (!string.IsNullOrEmpty(centerMsg))
+            ctx.Services.Effects.PrintCenter(ctx.Owner, SkillHelpers.FormatMessage(centerMsg, ctx, dmgText));
+
+        string victimMsg = action.GetString("victim_message");
+        if (!string.IsNullOrEmpty(victimMsg) && victim!.Slot != ctx.Owner.Slot)
+            ctx.Services.Effects.PrintChat(victim, SkillHelpers.FormatMessage(victimMsg, ctx, dmgText));
+    }
+
+    internal static float ResolveDamage(SkillContext ctx, SkillActionConfig action)
+    {
+        if (SkillHelpers.HasKey(action, "min_damage") || SkillHelpers.HasKey(action, "max_damage"))
+        {
+            int min = action.GetLevelInt("min_damage", ctx.SkillLevel, 1);
+            int max = action.GetLevelInt("max_damage", ctx.SkillLevel, min);
+            return SkillHelpers.RollInclusive(ctx.Services.Rng, min, max);
+        }
+        return action.GetLevelFloat("damage", ctx.SkillLevel, 0f);
+    }
+}
+
+public sealed class ReflectDamagePrimitive : ISkillPrimitive
+{
+    public string Type => "reflect_damage";
+
+    public void Execute(SkillContext ctx, SkillActionConfig action)
+    {
+        var attacker = ctx.ResolveSingleTarget(action.Target == "self" ? "attacker" : action.Target);
+        if (!SkillHelpers.IsAlive(attacker) || !SkillHelpers.IsAlive(ctx.Owner))
+            return;
+        if (attacker!.Slot == ctx.Owner.Slot)
+            return;
+
+        float damage = BonusDamagePrimitive.ResolveDamage(ctx, action);
+        if (damage <= 0f) return;
+
+        bool ignoreArmor = action.GetBool("ignore_armor", false);
+        ctx.Services.Combat.DealDamage(attacker, ctx.Owner, damage, "world", ignoreArmor: ignoreArmor, isSkillDamage: true);
+
+        string dmgText = ((int)Math.Round(damage)).ToString();
+        string centerMsg = action.GetString("center_message");
+        if (!string.IsNullOrEmpty(centerMsg))
+            ctx.Services.Effects.PrintCenter(ctx.Owner, SkillHelpers.FormatMessage(centerMsg, ctx, dmgText));
+
+        string attackerMsg = action.GetString("attacker_message");
+        if (!string.IsNullOrEmpty(attackerMsg))
+            ctx.Services.Effects.PrintCenter(attacker, SkillHelpers.FormatMessage(attackerMsg, ctx, dmgText));
+    }
+}
+
+public sealed class VampiricPrimitive : ISkillPrimitive
+{
+    public string Type => "vampiric";
+
+    public void Execute(SkillContext ctx, SkillActionConfig action)
+    {
+        var owner = ctx.ResolveSingleTarget(action.Target);
+        var pawn = SkillHelpers.GetAlivePawn(owner);
+        if (owner == null || pawn == null) return;
+
+        int maxCap = action.GetLevelInt("max_cap", ctx.SkillLevel, 260);
+        if (maxCap > 0 && pawn.Health >= maxCap)
+        {
+            string capMsg = action.GetString("cap_message");
+            if (!string.IsNullOrEmpty(capMsg))
+                ctx.Services.Effects.PrintCenter(owner, SkillHelpers.FormatMessage(capMsg, ctx, maxCap.ToString()));
+            return;
+        }
+
+        int heal;
+        if (SkillHelpers.HasKey(action, "min_heal") || SkillHelpers.HasKey(action, "max_heal"))
+        {
+            int min = action.GetLevelInt("min_heal", ctx.SkillLevel, 12);
+            int max = action.GetLevelInt("max_heal", ctx.SkillLevel, Math.Max(min, 20));
+            heal = SkillHelpers.RollInclusive(ctx.Services.Rng, min, max);
+        }
+        else
+        {
+            heal = action.GetLevelInt("amount", ctx.SkillLevel, 15);
+        }
+
+        if (heal <= 0) return;
+
+        int targetHp = maxCap > 0 ? Math.Min(pawn.Health + heal, maxCap) : pawn.Health + heal;
+        int actualHeal = targetHp - pawn.Health;
+        if (actualHeal <= 0) return;
+
+        ctx.Services.State.SetHealth(owner, targetHp, add: false, updateMaxHealth: targetHp > pawn.MaxHealth);
+
+        string centerMsg = action.GetString("center_message");
+        if (!string.IsNullOrEmpty(centerMsg))
+            ctx.Services.Effects.PrintCenter(owner, SkillHelpers.FormatMessage(centerMsg, ctx, actualHeal.ToString()));
+    }
+}
+
+public sealed class AoEDamagePrimitive : ISkillPrimitive
+{
+    public string Type => "aoe_damage";
+
+    public void Execute(SkillContext ctx, SkillActionConfig action)
+    {
+        var origin = SkillHelpers.CloneOrigin(ctx.Owner);
+        if (origin == null)
+        {
+            if (ShouldRefund(ctx, action)) ctx.Activated = false;
+            return;
+        }
+
+        float radius = action.GetLevelFloat("radius", ctx.SkillLevel, 250f);
+        int maxTargets = action.GetLevelInt("max_targets", ctx.SkillLevel, 20);
+        bool respectImmunity = action.GetBool("respect_immunity", true);
+        bool refundIfNone = ShouldRefund(ctx, action);
+        bool drawBeams = action.GetBool("draw_beams", false);
+        bool drawRings = action.GetBool("draw_rings", true);
+        string weaponHint = action.GetString("weapon_hint", "hegrenade");
+        string sound = action.GetString("sound");
+
+        bool ffa = ctx.Services.Sessions.IsFriendlyFireAllowed();
+        CsTeam? enemyTeam = ffa ? null : SkillHelpers.GetEnemyTeam(ctx.Owner.Team);
+        if (!ffa && enemyTeam == null)
+        {
+            if (refundIfNone) ctx.Activated = false;
+            return;
+        }
+
+        var candidates = ctx.Services.Combat.GetPlayersInRadius(origin, radius, teamFilter: enemyTeam, exclude: ctx.Owner, aliveOnly: true);
+        if (candidates.Count == 0)
+        {
+            if (refundIfNone)
+            {
+                ctx.Activated = false;
+                ctx.Services.Effects.PrintChat(ctx.Owner, "No enemies within range.");
+            }
+            return;
+        }
+
+        Color beamColor = SkillHelpers.ReadColor(action, "beam_color", Color.FromArgb(255, 160, 160, 230));
+        Color ringColor = SkillHelpers.ReadColor(action, "ring_color", Color.FromArgb(255, 255, 120, 40));
+
+        // Sort closest first for deterministic targeting
+        candidates.Sort((a, b) =>
+        {
+            var oa = SkillHelpers.CloneOrigin(a);
+            var ob = SkillHelpers.CloneOrigin(b);
+            float da = oa != null ? DistSq(origin, oa) : float.MaxValue;
+            float db = ob != null ? DistSq(origin, ob) : float.MaxValue;
+            return da.CompareTo(db);
+        });
+
+        int hitCount = 0;
+        int immuneCount = 0;
+        int totalDamageDealt = 0;
+        var casterBeamPos = new Vector(origin.X, origin.Y, origin.Z + 38f);
+
+        foreach (var enemy in candidates)
+        {
+            if (hitCount >= maxTargets) break;
+            if (!SkillHelpers.IsAlive(enemy)) continue;
+
+            if (respectImmunity && SkillHelpers.IsUltimateImmune(ctx.Services, enemy))
+            {
+                immuneCount++;
+                ctx.Services.Effects.PrintChat(enemy, "Your Ultimate Immunity blocked an enemy ultimate!");
+                continue;
+            }
+
+            float dmg = BonusDamagePrimitive.ResolveDamage(ctx, action);
+            if (dmg <= 0f) continue;
+
+            var enemyPos = SkillHelpers.CloneOrigin(enemy);
+            ctx.Services.Combat.DealDamage(enemy, ctx.Owner, dmg, weaponHint, ignoreArmor: false, isSkillDamage: true);
+            hitCount++;
+            totalDamageDealt = (int)Math.Round(dmg);
+
+            if (enemyPos != null)
+            {
+                if (drawBeams)
+                {
+                    var targetBeamPos = new Vector(enemyPos.X, enemyPos.Y, enemyPos.Z + 38f);
+                    ctx.Services.Effects.DrawBeamPoints(casterBeamPos, targetBeamPos, beamColor, 3.0f, 0.7f);
+                }
+                if (drawRings)
+                {
+                    ctx.Services.Effects.DrawBeamRing(enemyPos, 45f, ringColor, 2.5f, 0.6f, 12, 20f);
+                }
+            }
+
+            string targetMsg = action.GetString("target_message");
+            if (!string.IsNullOrEmpty(targetMsg))
+                ctx.Services.Effects.PrintCenter(enemy, SkillHelpers.FormatMessage(targetMsg, ctx, ((int)Math.Round(dmg)).ToString()));
+
+            if (!string.IsNullOrEmpty(sound))
+                ctx.Services.Effects.PlaySound(enemy, sound);
+        }
+
+        if (hitCount == 0)
+        {
+            if (immuneCount > 0)
+                ctx.Services.Effects.PrintChat(ctx.Owner, "All nearby enemies are immune to ultimates!");
+            if (refundIfNone)
+                ctx.Activated = false;
+            return;
+        }
+
+        if (drawRings)
+        {
+            ctx.Services.Effects.DrawBeamRing(origin, Math.Min(radius, 255f), ringColor, 3.5f, 0.8f, 20, 25f);
+        }
+
+        if (!string.IsNullOrEmpty(sound))
+            ctx.Services.Effects.PlaySound(ctx.Owner, sound);
+
+        string centerMsg = action.GetString("center_message");
+        if (!string.IsNullOrEmpty(centerMsg))
+            ctx.Services.Effects.PrintCenter(ctx.Owner, SkillHelpers.FormatMessage(centerMsg, ctx, hitCount.ToString(), totalDamageDealt.ToString()));
+        else if (ctx.Trigger == SkillTrigger.PlayerUltimate)
+            ctx.Services.Effects.PrintCenter(ctx.Owner, $"{ctx.Skill?.Name ?? "Ability"} struck {hitCount} enemy(s)!");
+    }
+
+    private static bool ShouldRefund(SkillContext ctx, SkillActionConfig action)
+    {
+        if (action.Params.ContainsKey("refund_if_none"))
+            return action.GetBool("refund_if_none", false);
+        return ctx.Trigger == SkillTrigger.PlayerUltimate || ctx.Trigger == SkillTrigger.PlayerAbility;
+    }
+
+    private static float DistSq(Vector a, Vector b)
+    {
+        float dx = a.X - b.X;
+        float dy = a.Y - b.Y;
+        float dz = a.Z - b.Z;
+        return dx * dx + dy * dy + dz * dz;
+    }
+}
+
+public sealed class BurnDotPrimitive : ISkillPrimitive
+{
+    private readonly RoundTracker _roundTracker;
+
+    internal BurnDotPrimitive(RoundTracker roundTracker)
+    {
+        _roundTracker = roundTracker;
+    }
+
+    public string Type => "burn_dot";
+
+    public void Execute(SkillContext ctx, SkillActionConfig action)
+    {
+        var victim = ctx.ResolveSingleTarget(action.Target == "self" ? "victim" : action.Target);
+        if (!SkillHelpers.IsAlive(victim) || !SkillHelpers.IsAlive(ctx.Owner))
+            return;
+
+        string preventKey = action.GetString("prevent_stack_key");
+        if (!string.IsNullOrEmpty(preventKey) && ctx.Services.State.GetCustomData<bool>(victim!, preventKey))
+        {
+            ctx.Activated = false;
+            return;
+        }
+
+        float duration = action.GetLevelFloat("duration", ctx.SkillLevel, 3.0f);
+        float damagePerTick = action.GetLevelFloat("damage_per_tick", ctx.SkillLevel, 4.0f);
+        float interval = Math.Max(0.25f, action.GetLevelFloat("interval", ctx.SkillLevel, 0.5f));
+        Color fxColor = SkillHelpers.ReadColor(action, "color", Color.FromArgb(255, 232, 111, 0));
+
+        if (!string.IsNullOrEmpty(preventKey))
+        {
+            ctx.Services.State.SetCustomData(victim!, preventKey, true);
+            ctx.Services.State.SchedulePlayerTimer(victim!, duration, () =>
+            {
+                if (SkillHelpers.IsValidPlayer(victim))
+                    ctx.Services.State.SetCustomData(victim!, preventKey, false);
+            }, repeat: false, tag: $"guard_{preventKey}");
+        }
+
+        // Visual beam from attacker to victim
+        var start = SkillHelpers.CloneOrigin(ctx.Owner);
+        var end = SkillHelpers.CloneOrigin(victim);
+        if (start != null && end != null)
+        {
+            ctx.Services.Effects.DrawBeamPoints(
+                new Vector(start.X, start.Y, start.Z + 25f),
+                new Vector(end.X, end.Y, end.Z + 25f),
+                fxColor, 3.0f, 0.7f);
+        }
+
+        int totalTicks = Math.Max(1, (int)Math.Round(duration / interval));
+        int capturedRound = _roundTracker.CurrentRoundId;
+        var services = ctx.Services;
+        var attacker = ctx.Owner;
+
+        for (int i = 1; i <= totalTicks; i++)
+        {
+            float tickDelay = i * interval;
+            services.State.SchedulePlayerTimer(victim!, tickDelay, () =>
+            {
+                if (capturedRound != _roundTracker.CurrentRoundId) return;
+                if (!SkillHelpers.IsAlive(victim)) return;
+
+                var validAttacker = SkillHelpers.IsValidPlayer(attacker) ? attacker : null;
+                services.Combat.DealDamage(victim!, validAttacker, damagePerTick, "inferno", ignoreArmor: false, isSkillDamage: true);
+
+                var pos = SkillHelpers.CloneOrigin(victim);
+                if (pos != null)
+                    services.Effects.DrawBeamRing(pos, 32f, fxColor, 2.0f, 0.4f, 10, 15f);
+            }, repeat: false, tag: $"dot_{ctx.Skill?.Key ?? "burn"}");
+        }
+
+        string attackerMsg = action.GetString("attacker_message");
+        if (!string.IsNullOrEmpty(attackerMsg))
+            ctx.Services.Effects.PrintChat(ctx.Owner, SkillHelpers.FormatMessage(attackerMsg, ctx, duration.ToString("0.#")));
+
+        string victimMsg = action.GetString("victim_message");
+        if (!string.IsNullOrEmpty(victimMsg))
+            ctx.Services.Effects.PrintChat(victim!, SkillHelpers.FormatMessage(victimMsg, ctx, duration.ToString("0.#")));
+    }
+}
+
+public sealed class StealCashPrimitive : ISkillPrimitive
+{
+    public string Type => "steal_cash";
+
+    public void Execute(SkillContext ctx, SkillActionConfig action)
+    {
+        var victim = ctx.ResolveSingleTarget(action.Target == "self" ? "victim" : action.Target);
+        if (!SkillHelpers.IsAlive(victim) || !SkillHelpers.IsAlive(ctx.Owner))
+            return;
+
+        int requested = action.GetLevelInt("amount", ctx.SkillLevel, 50);
+        if (requested <= 0) return;
+
+        int victimCash = SkillHelpers.GetCash(victim);
+        int stolen = Math.Min(requested, Math.Max(0, victimCash));
+        if (stolen <= 0) return;
+
+        ctx.Services.State.SetCash(victim!, -stolen, add: true);
+        ctx.Services.State.SetCash(ctx.Owner, stolen, add: true);
+
+        var start = SkillHelpers.CloneOrigin(ctx.Owner);
+        var end = SkillHelpers.CloneOrigin(victim);
+        if (start != null && end != null)
+        {
+            ctx.Services.Effects.DrawBeamPoints(
+                new Vector(start.X, start.Y, start.Z + 25f),
+                new Vector(end.X, end.Y, end.Z + 25f),
+                Color.FromArgb(255, 100, 255, 248), 3.0f, 0.7f);
+        }
+
+        string attackerMsg = action.GetString("attacker_message");
+        if (!string.IsNullOrEmpty(attackerMsg))
+            ctx.Services.Effects.PrintChat(ctx.Owner, SkillHelpers.FormatMessage(attackerMsg, ctx, stolen.ToString()));
+
+        string victimMsg = action.GetString("victim_message");
+        if (!string.IsNullOrEmpty(victimMsg))
+            ctx.Services.Effects.PrintChat(victim!, SkillHelpers.FormatMessage(victimMsg, ctx, stolen.ToString()));
+    }
+}
+
+public sealed class CashToHealthPrimitive : ISkillPrimitive
+{
+    public string Type => "cash_to_health";
+
+    public void Execute(SkillContext ctx, SkillActionConfig action)
+    {
+        var owner = ctx.Owner;
+        var pawn = SkillHelpers.GetAlivePawn(owner);
+        if (pawn == null)
+        {
+            ctx.Activated = false;
+            return;
+        }
+
+        int healAmount = action.GetLevelInt("amount", ctx.SkillLevel, 15);
+        int cost = action.GetLevelInt("cost", ctx.SkillLevel, 100);
+        int maxHpThreshold = action.GetLevelInt("max_hp_threshold", ctx.SkillLevel, 175);
+
+        if (pawn.Health > maxHpThreshold)
+        {
+            ctx.Activated = false;
+            ctx.Services.Effects.PrintChat(owner, $"You already have over {maxHpThreshold} HP!");
+            return;
+        }
+
+        int cash = SkillHelpers.GetCash(owner);
+        if (cash < cost)
+        {
+            ctx.Activated = false;
+            ctx.Services.Effects.PrintChat(owner, $"Not enough cash! Need ${cost}.");
+            return;
+        }
+
+        ctx.Services.State.SetCash(owner, -cost, add: true);
+        int newHp = pawn.Health + healAmount;
+        ctx.Services.State.SetHealth(owner, newHp, add: false, updateMaxHealth: newHp > pawn.MaxHealth);
+
+        ctx.Services.Effects.PrintCenter(owner, $"Curing Ritual healed you for +{healAmount} HP!");
+        var origin = SkillHelpers.CloneOrigin(owner);
+        if (origin != null)
+        {
+            ctx.Services.Effects.DrawBeamRing(origin, 50f, Color.FromArgb(220, 255, 255, 220), 2.5f, 1.0f, 16, 25f);
+            ctx.Services.Effects.DrawBeamRing(origin, 55f, Color.FromArgb(220, 255, 235, 140), 2.5f, 1.0f, 16, 35f);
+        }
+    }
+}
+
+public sealed class RandomEnemyDrainPrimitive : ISkillPrimitive
+{
+    public string Type => "random_enemy_drain";
+
+    public void Execute(SkillContext ctx, SkillActionConfig action)
+    {
+        var owner = ctx.Owner;
+        var pawn = SkillHelpers.GetAlivePawn(owner);
+        if (pawn == null)
+        {
+            ctx.Activated = false;
+            return;
+        }
+
+        bool ffa = ctx.Services.Sessions.IsFriendlyFireAllowed();
+        CsTeam? enemyTeam = ffa ? null : SkillHelpers.GetEnemyTeam(owner.Team);
+        if (!ffa && enemyTeam == null)
+        {
+            ctx.Activated = false;
+            return;
+        }
+
+        var enemies = ctx.Services.Sessions.GetAlivePlayers(enemyTeam)
+            .Where(p => SkillHelpers.IsAlive(p) && p.Slot != owner.Slot)
+            .ToList();
+
+        if (enemies.Count == 0)
+        {
+            ctx.Activated = false;
+            ctx.Services.Effects.PrintChat(owner, "No living enemies to target.");
+            return;
+        }
+
+        var target = enemies[ctx.Services.Rng.Next(enemies.Count)];
+        if (SkillHelpers.IsUltimateImmune(ctx.Services, target))
+        {
+            ctx.Activated = false;
+            ctx.Services.Effects.PrintChat(target, "Your Ultimate Immunity blocked Locust Swarm!");
+            ctx.Services.Effects.PrintChat(owner, $"{target.PlayerName} is immune to ultimates!");
+            return;
+        }
+
+        float damage = action.GetLevelFloat("damage", ctx.SkillLevel, 35f);
+        int heal = action.GetLevelInt("heal", ctx.SkillLevel, 35);
+        int healthCap = action.GetLevelInt("health_cap", ctx.SkillLevel, 225);
+        int armorBonus = action.GetLevelInt("armor", ctx.SkillLevel, 10);
+        int armorCap = action.GetLevelInt("armor_cap", ctx.SkillLevel, 250);
+
+        ctx.Services.Combat.DealDamage(target, owner, damage, "world", ignoreArmor: false, isSkillDamage: true);
+
+        int oldHp = pawn.Health;
+        int newHp = Math.Min(oldHp + heal, healthCap);
+        if (newHp > oldHp)
+        {
+            ctx.Services.State.SetHealth(owner, newHp, add: false, updateMaxHealth: newHp > pawn.MaxHealth);
+            ctx.Services.Effects.PrintChat(owner, newHp >= healthCap
+                ? $"Locust Swarm reached health cap ({healthCap} HP)."
+                : $"Locust Swarm drained +{newHp - oldHp} HP!");
+        }
+
+        int currentArmor = pawn.ArmorValue;
+        int newArmor = Math.Min(currentArmor + armorBonus, armorCap);
+        if (newArmor > currentArmor)
+        {
+            ctx.Services.State.SetArmor(owner, newArmor, add: false, giveHelmet: true);
+            ctx.Services.Effects.PrintChat(owner, newArmor >= armorCap
+                ? $"Locust Swarm reached armor cap ({armorCap})."
+                : $"Locust Swarm granted +{newArmor - currentArmor} armor!");
+        }
+
+        ctx.Services.Effects.PrintCenter(owner, $"Locust Swarm hit {target.PlayerName} for {(int)damage} damage!");
+        ctx.Services.Effects.PrintCenter(target, $"You were struck by {owner.PlayerName}'s Locust Swarm!");
+
+        var origin = SkillHelpers.CloneOrigin(owner);
+        if (origin != null)
+        {
+            ctx.Services.Effects.DrawBeamRing(origin, 65f, Color.FromArgb(220, 0, 80, 220), 3f, 1.0f, 16, 20f);
+            ctx.Services.Effects.DrawBeamRing(origin, 70f, Color.FromArgb(220, 0, 120, 255), 3f, 1.0f, 16, 40f);
+        }
+    }
+}
