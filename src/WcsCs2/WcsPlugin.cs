@@ -133,6 +133,8 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
             if (!string.IsNullOrWhiteSpace(_config.DefaultCtAgentModel))
                 manifest.AddResource(_config.DefaultCtAgentModel);
             manifest.AddResource("models/chicken/chicken.vmdl");
+            manifest.AddResource("particles/ui/ui_electric_exp_glow.vpcf");
+            manifest.AddResource("particles/explosions_fx/explosion_smokegrenade_distort.vpcf");
         });
 
         RegisterListener<Listeners.OnTick>(() => _state.OnTick());

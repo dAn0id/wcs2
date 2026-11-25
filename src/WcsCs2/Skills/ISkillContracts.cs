@@ -215,9 +215,11 @@ public interface IEffectsService
     void DrawBeamPoints(Vector start, Vector end, Color color, float width = 2f, float duration = 1f);
     void DrawBeamRing(Vector center, float radius, Color color, float width = 2f, float duration = 1f, int segments = 16, float zOffset = 10f);
     void SpawnParticle(string effectName, Vector origin, float duration = 2f);
+    void SpawnParticle(Vector origin, string particlePath, float durationSeconds = 3f);
     void SendFade(CCSPlayerController player, Color color, int durationMs, int holdTimeMs, int flags = 0x0001);
     void SendShake(CCSPlayerController player, float amplitude, float frequency, float duration);
     void PlaySound(CCSPlayerController player, string soundEvent);
+    void EmitSound(CCSPlayerController player, string soundEvent, float volume = 1.0f);
     void PlaySoundAll(string soundEvent);
     CBreakableProp? SpawnPhysicsProp(Vector origin, QAngle angles, string modelPath, bool explosive = false, float explosionDamage = 90f, float explosionRadius = 220f, CCSPlayerController? owner = null, float lifetime = 30f);
     void PrintChat(CCSPlayerController player, string message);

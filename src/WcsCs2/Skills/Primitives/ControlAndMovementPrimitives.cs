@@ -242,6 +242,80 @@ public sealed class TeleportPrimitive : ISkillPrimitive
     }
 }
 
+public sealed class TeleportDashPrimitive : ISkillPrimitive
+{
+    public const string DefaultSound = "UIPanorama.equip_musicKit";
+    public const string DefaultGlowParticle = "particles/ui/ui_electric_exp_glow.vpcf";
+    public const string DefaultDistortParticle = "particles/explosions_fx/explosion_smokegrenade_distort.vpcf";
+
+    public string Type => "teleport_dash";
+
+    public void Execute(SkillContext ctx, SkillActionConfig action)
+    {
+        var owner = ctx.Owner;
+        var pawn = SkillHelpers.GetAlivePawn(owner);
+        if (pawn == null || pawn.AbsOrigin == null)
+        {
+            ctx.Activated = false;
+            return;
+        }
+
+        // Capture launch origin before applying dash velocity
+        var origin = new Vector(pawn.AbsOrigin.X, pawn.AbsOrigin.Y, pawn.AbsOrigin.Z);
+
+        float force = Math.Clamp(action.GetLevelFloat("force", ctx.SkillLevel, 1000f), 200f, 2500f);
+        float zBoost = action.GetLevelFloat("z_boost", ctx.SkillLevel, 150f);
+
+        // Source 2 AngleVectors forward calculation (negative pitch looks up)
+        var eyeAngles = pawn.EyeAngles;
+        float pitchRad = eyeAngles.X * (MathF.PI / 180f);
+        float yawRad = eyeAngles.Y * (MathF.PI / 180f);
+        float cosPitch = MathF.Cos(pitchRad);
+
+        float velX = cosPitch * MathF.Cos(yawRad) * force;
+        float velY = cosPitch * MathF.Sin(yawRad) * force;
+        float velZ = -MathF.Sin(pitchRad) * force;
+
+        float currentVelZ = pawn.AbsVelocity?.Z ?? 0f;
+        var newVel = new Vector(velX, velY, MathF.Max(currentVelZ, velZ + zBoost));
+
+        pawn.Teleport(null, null, newVel);
+
+        string sound = action.GetString("sound", DefaultSound);
+        float soundVolume = Math.Clamp(action.GetLevelFloat("sound_volume", ctx.SkillLevel, 0.5f), 0.05f, 1.0f);
+        if (!string.IsNullOrWhiteSpace(sound))
+        {
+            ctx.Services.Effects.EmitSound(owner, sound, soundVolume);
+        }
+
+        int particleCount = Math.Clamp(action.GetLevelInt("particle_count", ctx.SkillLevel, 2), 0, 4);
+        string glowParticle = action.GetString("glow_particle", DefaultGlowParticle);
+        float glowDuration = action.GetLevelFloat("glow_duration", ctx.SkillLevel, 3.0f);
+        string distortParticle = action.GetString("distort_particle", DefaultDistortParticle);
+        float distortDuration = action.GetLevelFloat("distort_duration", ctx.SkillLevel, 2.0f);
+
+        for (int i = 0; i < particleCount; i++)
+        {
+            if (!string.IsNullOrWhiteSpace(glowParticle))
+            {
+                ctx.Services.Effects.SpawnParticle(
+                    new Vector(origin.X, origin.Y, origin.Z + 20f),
+                    glowParticle,
+                    glowDuration);
+            }
+            if (!string.IsNullOrWhiteSpace(distortParticle))
+            {
+                ctx.Services.Effects.SpawnParticle(
+                    new Vector(origin.X, origin.Y, origin.Z),
+                    distortParticle,
+                    distortDuration);
+            }
+        }
+
+        ctx.Activated = true;
+    }
+}
+
 public sealed class RespawnPrimitive : ISkillPrimitive
 {
     private readonly RoundTracker _roundTracker;

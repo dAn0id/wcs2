@@ -77,22 +77,29 @@ public sealed class EffectsService : IEffectsService
     }
 
     public void SpawnParticle(string effectName, Vector origin, float duration = 2f)
+        => SpawnParticle(origin, effectName, duration);
+
+    public void SpawnParticle(Vector origin, string particlePath, float durationSeconds = 3f)
     {
-        if (string.IsNullOrWhiteSpace(effectName)) return;
+        if (string.IsNullOrWhiteSpace(particlePath)) return;
         var particle = Utilities.CreateEntityByName<CParticleSystem>("info_particle_system");
         if (particle == null || !particle.IsValid) return;
 
-        particle.EffectName = effectName;
+        particle.EffectName = particlePath;
         particle.StartActive = true;
         particle.Teleport(origin, QAngle.Zero, Vector.Zero);
         particle.DispatchSpawn();
         particle.AcceptInput("Start");
 
-        _plugin.AddTimer(Math.Clamp(duration, 0.2f, 5.0f), () =>
+        _plugin.AddTimer(Math.Clamp(durationSeconds, 0.2f, 10.0f), () =>
         {
             try
             {
-                if (particle.IsValid) particle.Remove();
+                if (particle.IsValid)
+                {
+                    particle.AcceptInput("Stop");
+                    particle.Remove();
+                }
             }
             catch { /* already removed */ }
         }, TimerFlags.STOP_ON_MAPCHANGE);
@@ -134,6 +141,18 @@ public sealed class EffectsService : IEffectsService
     {
         if (player == null || !player.IsValid || player.IsBot || string.IsNullOrWhiteSpace(soundEvent)) return;
         player.ExecuteClientCommand($"play {soundEvent}");
+    }
+
+    public void EmitSound(CCSPlayerController player, string soundEvent, float volume = 1.0f)
+    {
+        if (player == null || !player.IsValid || string.IsNullOrWhiteSpace(soundEvent)) return;
+        try
+        {
+            float clampedVol = Math.Clamp(volume, 0.05f, 1.0f);
+            CBaseEntity emitter = player.PlayerPawn?.Value is { IsValid: true } pawn ? pawn : player;
+            emitter.EmitSound(soundEvent, volume: clampedVol);
+        }
+        catch { /* ignore invalid sound event or entity */ }
     }
 
     public void PlaySoundAll(string soundEvent)

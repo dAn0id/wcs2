@@ -48,6 +48,7 @@ public sealed class SkillExecutionEngine : ISkillExecutionEngine
         RegisterPrimitive(new AoEFreezePrimitive());
         RegisterPrimitive(new PushPrimitive());
         RegisterPrimitive(new TeleportPrimitive());
+        RegisterPrimitive(new TeleportDashPrimitive());
         RegisterPrimitive(new RespawnPrimitive(_roundTracker));
         RegisterPrimitive(new ShakePrimitive());
         RegisterPrimitive(new FadePrimitive());

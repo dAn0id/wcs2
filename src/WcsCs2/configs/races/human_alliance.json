@@ -150,6 +150,26 @@
             "push_factor": 1.8
           }
         }
+        // Dash-style alternative to Teleport: launches the player forward with velocity + electric/distort particles
+        // instead of instant point-to-point teleport. To enable, comment out the "teleport" block above,
+        // uncomment the "teleport_dash" block below, and run `wcs_reload`.
+        // {
+        //   "type": "teleport_dash",
+        //   "target": "self",
+        //   "level_values": {
+        //     "force": [700, 800, 900, 1000, 1100, 1200, 1300, 1400]
+        //   },
+        //   "params": {
+        //     "z_boost": 150,
+        //     "sound": "UIPanorama.equip_musicKit",
+        //     "sound_volume": 0.5,
+        //     "particle_count": 2,
+        //     "glow_particle": "particles/ui/ui_electric_exp_glow.vpcf",
+        //     "glow_duration": 3.0,
+        //     "distort_particle": "particles/explosions_fx/explosion_smokegrenade_distort.vpcf",
+        //     "distort_duration": 2.0
+        //   }
+        // }
       ]
     }
   ]
