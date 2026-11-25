@@ -63,6 +63,7 @@ Publishing with `-r linux-x64 --no-self-contained` automatically bundles `WcsCs2
    ├── libe_sqlite3.so
    ├── configs/
    │   ├── wcs.json
+   │   ├── gamedata.json
    │   ├── items.json
    │   └── races/
    │       ├── archmage_proudmoore.json
@@ -108,12 +109,17 @@ Publishing with `-r linux-x64 --no-self-contained` automatically bundles `WcsCs2
    ]
    ```
 
-### 5. Customize Configs & Hot-Reload
+### 5. Customize Configs, Gamedata & Hot-Reload
 
-- **`configs/wcs.json`**: XP rates (`xp_interval`, `kill_xp`, `headshot_xp`, `knife_xp`, `round_win_xp`, etc.), Rested XP intervals, Level Bank new-player bonus, bot race behavior, menu style (`wasd`, `html`, `chat`, `console`), `allow_inspect_ultimate_bind`, and stock CS2 model paths.
+- **`configs/wcs.json`**: XP rates (`xp_interval`, `kill_xp`, `headshot_xp`, `knife_xp`, `round_win_xp`, etc.), Rested XP intervals, Level Bank new-player bonus, bot race behavior, menu style (`wasd`, `html`, `chat`, `console`), `allow_inspect_ultimate_bind`, `use_native_trace` (kill-switch for Source 2 collision tracing; falls back to safe managed teleport when `false`), and stock CS2 model paths.
+- **`configs/gamedata.json`**: Controls how `Source2TraceEngine` resolves native CS2 Linux x64 physics symbols (`TraceShape`, `GameTraceManager`, `CTraceFilter` vtable):
+  - `"resolution_mode": "auto"` *(default)* — Automatically resolves all 3 symbols directly from `libserver.so` ELF64 metadata on disk (Itanium RTTI for `12CTraceFilter`, VProf string xref + `.eh_frame_hdr` for `"Physics/TraceShape (Server)"`, and caller consensus for `GameTraceManager`) so `WcsCs2` survives CS2 compiler/patch updates without recompiling. If any symbol cannot be resolved dynamically, it falls back per-symbol to `linux_signatures` in `gamedata.json`.
+  - `"resolution_mode": "dynamic"` — Dynamic ELF64 resolution only.
+  - `"resolution_mode": "gamedata"` — Uses only `linux_signatures` from `gamedata.json` (useful if an admin wants to pin or override signatures without recompiling).
 - **`configs/items.json`**: Shop item pricing, buy limits, duration, and action lists.
 - **`configs/races/*.json`**: One JSON file per race; add new races or tweak skill values per level without recompiling.
-- **Hot-Reload Configs:** Run `wcs_reload` in the server console (or as an admin) to reload `wcs.json`, `items.json`, and all `races/*.json` live without restarting the server.
+- **Hot-Reload Configs & Gamedata:** Run `wcs_reload` in the server console (or as an admin) to reload `wcs.json`, `gamedata.json`, `items.json`, and all `races/*.json` live without restarting the server.
+- **Collision Trace Self-Test:** Run `wcs_tracetest` in the server console (or as an admin) to run a live Line + Player-BBox Hull diagnostic trace on the current map and verify symbol resolution sources and collision hits.
 
 ### 6. Start & Verify
 
@@ -155,13 +161,14 @@ bind c ability
 ```
 - `ultimate` / `css_ultimate` — Activate your race's Ultimate skill. When `allow_inspect_ultimate_bind` is `true` in `wcs.json`, players can also opt in to triggering their Ultimate with the weapon inspect key (`F` / `+lookatweapon`).
 - `ability` / `css_ability` — Activate your race's Ability skill (e.g. Shadow Hunter Serpent Ward, Defiladed Destructor Build Barrel).
-- `wcs_reload` — Reload `wcs.json`, `items.json`, and all `races/*.json` configs (admin / server console).
+- `wcs_reload` — Reload `wcs.json`, `gamedata.json`, `items.json`, and all `races/*.json` configs (admin / server console).
+- `wcs_tracetest` — Run a live Source 2 Line + Player-BBox Hull trace self-test and log symbol resolution sources/offsets (admin / server console).
 
 ---
 
 ## Project Structure
 
-- `src/WcsCs2/Config/` — Strongly typed JSON config models (`wcs.json`, `items.json`, `races/*.json`)
+- `src/WcsCs2/Config/` — Strongly typed JSON config models (`wcs.json`, `gamedata.json`, `items.json`, `races/*.json`)
 - `src/WcsCs2/Core/` — Sessions, player state management, progression/XP/bank, shop, bots, race registry
 - `src/WcsCs2/Data/` — Async WAL-mode SQLite repository
 - `src/WcsCs2/Services/` — Combat/damage hooks, weapons/restrictions, visual/audio effects, Source 2 collision tracer & teleportation

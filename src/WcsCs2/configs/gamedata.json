@@ -1,0 +1,22 @@
+{
+  "resolution_mode": "auto",
+  "dynamic": {
+    "trace_shape_vprof_string": "Physics/TraceShape (Server)",
+    "trace_filter_rtti_name": "12CTraceFilter"
+  },
+  "linux_signatures": {
+    "trace_shape": {
+      "pattern": "55 48 8D 05 ? ? ? ? 48 89 E5 41 57 49 89 F7 41 56 48 8D 35 ? ? ? ? 49 89 CE"
+    },
+    "game_trace_manager": {
+      "pattern": "48 8D 05 ? ? ? ? 4C 89 EA 4C 8B",
+      "rip_offset": 3,
+      "instr_size": 7
+    },
+    "trace_filter_vtable": {
+      "pattern": "48 8D 05 ? ? ? ? 48 89 85 D0 FE FF FF 48 B8 41 00 18 00",
+      "rip_offset": 3,
+      "instr_size": 7
+    }
+  }
+}

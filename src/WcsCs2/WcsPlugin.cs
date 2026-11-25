@@ -68,7 +68,8 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
         _state = new PlayerStateManager(this);
         _progression = new ProgressionService(this, _config, _registry, _repo, _effects, Logger);
         _combat = new CombatService(_state, _effects, _progression);
-        _tracer = new Source2TraceEngine(Logger, _config.UseNativeTrace);
+        var gamedata = GamedataConfig.Load(configDir, Logger);
+        _tracer = new Source2TraceEngine(Logger, _config.UseNativeTrace, gamedata);
         _teleport = new TeleportService(_weapons, _tracer, _rng);
         _shop = new ShopService(_registry, _progression, _effects);
         _bots = new BotRaceService(_config, _registry, _progression, _rng);
@@ -729,14 +730,15 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
         }, HookMode.Pre);
 
         // Admin reload command (server console or WCS admin)
-        AddCommand("wcs_reload", "Reload WCS configs, races, and items", (p, _) =>
+        AddCommand("wcs_reload", "Reload WCS configs, gamedata, races, and items", (p, _) =>
         {
             if (p != null && !_menus.IsWcsAdmin(p)) return;
             string configDir = Path.Combine(ModuleDirectory, "configs");
             _config = _registry.LoadConfig(configDir);
             _registry.LoadAll(configDir);
-            _tracer.SetEnabled(_config.UseNativeTrace);
-            string msg = $"Reloaded WCS: {_registry.Races.Count} races, {_registry.Items.Count} items (use_native_trace={_config.UseNativeTrace}, tracer_available={_tracer.IsAvailable}).";
+            var gamedata = GamedataConfig.Load(configDir, Logger);
+            _tracer.Reload(_config.UseNativeTrace, gamedata);
+            string msg = $"Reloaded WCS: {_registry.Races.Count} races, {_registry.Items.Count} items (use_native_trace={_config.UseNativeTrace}, gamedata_mode={gamedata.ResolutionMode}, tracer_available={_tracer.IsAvailable}).";
             if (p != null) _effects.PrintChat(p, msg);
             else Logger.LogInformation("[WcsCs2] {Msg}", msg);
         });

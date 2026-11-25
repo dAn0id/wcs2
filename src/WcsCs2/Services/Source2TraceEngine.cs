@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Memory;
 using Microsoft.Extensions.Logging;
+using WcsCs2.Config;
 
 namespace WcsCs2.Services;
 
@@ -61,20 +62,11 @@ public readonly struct TraceHitResult
 
 /// <summary>
 /// Self-contained, crash-safe Source 2 physics raycast &amp; AABB hull tracer for Linux x64 CS2.
-/// All signatures and struct offsets verified directly against CS2 1.42.0.1 libserver.so.
+/// Supports dynamic ELF64 auto-resolution (RTTI + VProf xref + caller consensus) with
+/// configurable fallback/override via configs/gamedata.json and 32-byte aligned native buffers.
 /// </summary>
 public sealed unsafe class Source2TraceEngine
 {
-    // Verified unique Linux x64 signatures on CS2 1.42.0.1 libserver.so
-    private const string TraceShapeLinuxSig =
-        "55 48 8D 05 ? ? ? ? 48 89 E5 41 57 49 89 F7 41 56 48 8D 35 ? ? ? ? 49 89 CE";
-
-    private const string GameTraceManagerLinuxSig =
-        "48 8D 05 ? ? ? ? 4C 89 EA 4C 8B";
-
-    private const string CTraceFilterVtableLinuxSig =
-        "48 8D 05 ? ? ? ? 48 89 85 D0 FE FF FF 48 B8 41 00 18 00";
-
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate bool TraceShapeDelegate(
         IntPtr gameTraceManager,
@@ -147,7 +139,7 @@ public sealed unsafe class Source2TraceEngine
     }
 
     // Verified against HL2SDK cs2 gametrace.h & CS2 1.42.0.1 CGameTrace::Init (0x1e79800).
-    // Padded to 0x100 (256 bytes) so native writes up to 0xBC+ can never overflow the stack.
+    // Padded to 0x100 (256 bytes) and allocated 32-byte aligned so 0x30 movaps can never fault.
     [StructLayout(LayoutKind.Explicit, Size = 0x100)]
     private struct NativeGameTrace
     {
@@ -177,17 +169,24 @@ public sealed unsafe class Source2TraceEngine
     }
 
     private readonly ILogger _logger;
+    private GamedataConfig _gamedata;
     private TraceShapeDelegate? _traceShape;
+    private IntPtr _traceShapeAddr;
     private IntPtr _gameTraceManagerPtrAddr;
     private IntPtr _traceFilterVtable;
+    private IntPtr _moduleRuntimeBase;
+    private string _traceShapeSource = "unresolved";
+    private string _gtmSource = "unresolved";
+    private string _vtableSource = "unresolved";
     private bool _initialized;
 
     public bool IsEnabled { get; private set; }
     public bool IsAvailable => IsEnabled && _initialized;
 
-    public Source2TraceEngine(ILogger logger, bool enabled = false)
+    public Source2TraceEngine(ILogger logger, bool enabled = false, GamedataConfig? gamedata = null)
     {
         _logger = logger;
+        _gamedata = gamedata ?? new GamedataConfig();
         IsEnabled = enabled;
 
         if (!enabled)
@@ -196,55 +195,139 @@ public sealed unsafe class Source2TraceEngine
             return;
         }
 
-        EnsureInitialized();
+        EnsureInitialized(forceReinitialize: true);
     }
 
-    public void SetEnabled(bool enabled)
+    public void Reload(bool enabled, GamedataConfig gamedata)
     {
+        _gamedata = gamedata ?? new GamedataConfig();
         IsEnabled = enabled;
-        if (enabled && !_initialized)
-            EnsureInitialized();
+
+        if (!enabled)
+        {
+            _initialized = false;
+            _traceShape = null;
+            _traceShapeAddr = IntPtr.Zero;
+            _gameTraceManagerPtrAddr = IntPtr.Zero;
+            _traceFilterVtable = IntPtr.Zero;
+            _traceShapeSource = "disabled";
+            _gtmSource = "disabled";
+            _vtableSource = "disabled";
+            _logger.LogInformation("[WcsCs2] Source2TraceEngine disabled on reload (use_native_trace=false); using safe managed teleport fallback.");
+            return;
+        }
+
+        EnsureInitialized(forceReinitialize: true);
     }
 
-    private bool EnsureInitialized()
+    private bool EnsureInitialized(bool forceReinitialize = false)
     {
-        if (_initialized) return true;
+        if (_initialized && !forceReinitialize) return true;
+
+        _initialized = false;
+        _traceShape = null;
+        _traceShapeAddr = IntPtr.Zero;
+        _gameTraceManagerPtrAddr = IntPtr.Zero;
+        _traceFilterVtable = IntPtr.Zero;
+        _traceShapeSource = "unresolved";
+        _gtmSource = "unresolved";
+        _vtableSource = "unresolved";
 
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            _logger.LogWarning("[WcsCs2] Source2TraceEngine: Linux x64 signatures only; tracing disabled on this OS.");
+            _logger.LogWarning("[WcsCs2] Source2TraceEngine: Linux x64 resolution only; tracing disabled on this OS.");
             return false;
         }
 
         try
         {
             string serverPath = Addresses.ServerPath;
-            IntPtr traceShapeAddr = NativeAPI.FindSignature(serverPath, TraceShapeLinuxSig);
-            IntPtr gtmInstrAddr = NativeAPI.FindSignature(serverPath, GameTraceManagerLinuxSig);
-            IntPtr vtableInstrAddr = NativeAPI.FindSignature(serverPath, CTraceFilterVtableLinuxSig);
+            string mode = (_gamedata.ResolutionMode ?? "auto").Trim().ToLowerInvariant();
+            bool allowDynamic = mode is "auto" or "dynamic";
+            bool allowGamedata = mode is "auto" or "gamedata";
 
-            if (traceShapeAddr == IntPtr.Zero || gtmInstrAddr == IntPtr.Zero || vtableInstrAddr == IntPtr.Zero)
+            IntPtr traceShapeAddr = IntPtr.Zero;
+            IntPtr gtmPtrAddr = IntPtr.Zero;
+            IntPtr vtableAddr = IntPtr.Zero;
+            IntPtr runtimeBase = IntPtr.Zero;
+
+            // 1. Dynamic ELF64 resolution (survives compiler/register updates across CS2 patches)
+            if (allowDynamic)
+            {
+                var dyn = ElfSymbolResolver.Resolve(
+                    serverPath,
+                    _gamedata.Dynamic.TraceShapeVprofString,
+                    _gamedata.Dynamic.TraceFilterRttiName,
+                    _logger);
+
+                runtimeBase = dyn.RuntimeBase;
+
+                if (dyn.TraceShapeAddress != IntPtr.Zero)
+                {
+                    traceShapeAddr = dyn.TraceShapeAddress;
+                    _traceShapeSource = "dynamic-elf";
+                }
+                if (dyn.GameTraceManagerAddress != IntPtr.Zero)
+                {
+                    gtmPtrAddr = dyn.GameTraceManagerAddress;
+                    _gtmSource = "dynamic-elf";
+                }
+                if (dyn.TraceFilterVtableAddress != IntPtr.Zero)
+                {
+                    vtableAddr = dyn.TraceFilterVtableAddress;
+                    _vtableSource = "dynamic-elf";
+                }
+            }
+
+            if (runtimeBase == IntPtr.Zero)
+                runtimeBase = ElfSymbolResolver.FindModuleRuntimeBase(serverPath);
+
+            // 2. Fallback / override via configs/gamedata.json signatures
+            if (allowGamedata)
+            {
+                var sigs = _gamedata.LinuxSignatures;
+
+                if (traceShapeAddr == IntPtr.Zero)
+                {
+                    traceShapeAddr = ResolveSignatureEntry(serverPath, sigs.TraceShape);
+                    if (traceShapeAddr != IntPtr.Zero) _traceShapeSource = "gamedata";
+                }
+
+                if (gtmPtrAddr == IntPtr.Zero)
+                {
+                    gtmPtrAddr = ResolveSignatureEntry(serverPath, sigs.GameTraceManager);
+                    if (gtmPtrAddr != IntPtr.Zero) _gtmSource = "gamedata";
+                }
+
+                if (vtableAddr == IntPtr.Zero)
+                {
+                    vtableAddr = ResolveSignatureEntry(serverPath, sigs.TraceFilterVtable);
+                    if (vtableAddr != IntPtr.Zero) _vtableSource = "gamedata";
+                }
+            }
+
+            if (traceShapeAddr == IntPtr.Zero || gtmPtrAddr == IntPtr.Zero || vtableAddr == IntPtr.Zero)
             {
                 _logger.LogError(
-                    "[WcsCs2] Source2TraceEngine: signature resolution failed (TraceShape=0x{T:X}, GTM=0x{G:X}, Vtable=0x{V:X}). Teleport collision trace disabled safely.",
-                    traceShapeAddr.ToInt64(), gtmInstrAddr.ToInt64(), vtableInstrAddr.ToInt64());
+                    "[WcsCs2] Source2TraceEngine: resolution incomplete (mode={Mode}, TraceShape=[{TS}] 0x{T:X}, GTM*=[{GS}] 0x{G:X}, FilterVtable=[{VS}] 0x{V:X}). Native tracing disabled safely.",
+                    mode, _traceShapeSource, traceShapeAddr.ToInt64(), _gtmSource, gtmPtrAddr.ToInt64(), _vtableSource, vtableAddr.ToInt64());
                 return false;
             }
 
-            _gameTraceManagerPtrAddr = ResolveRipRelative(gtmInstrAddr, 3, 7);
-            _traceFilterVtable = ResolveRipRelative(vtableInstrAddr, 3, 7);
+            _moduleRuntimeBase = runtimeBase;
+            _traceShapeAddr = traceShapeAddr;
+            _gameTraceManagerPtrAddr = gtmPtrAddr;
+            _traceFilterVtable = vtableAddr;
             _traceShape = Marshal.GetDelegateForFunctionPointer<TraceShapeDelegate>(traceShapeAddr);
-
-            if (_gameTraceManagerPtrAddr == IntPtr.Zero || _traceFilterVtable == IntPtr.Zero)
-            {
-                _logger.LogError("[WcsCs2] Source2TraceEngine: RIP-relative resolution produced zero pointer.");
-                return false;
-            }
-
             _initialized = true;
+
             _logger.LogInformation(
-                "[WcsCs2] Source2TraceEngine initialized cleanly (TraceShape=0x{T:X}, GTM*=0x{G:X}, FilterVtable=0x{V:X}).",
-                traceShapeAddr.ToInt64(), _gameTraceManagerPtrAddr.ToInt64(), _traceFilterVtable.ToInt64());
+                "[WcsCs2] Source2TraceEngine initialized cleanly (mode={Mode}): " +
+                "TraceShape=[{TS}] 0x{T:X} ({TOff}), GTM*=[{GS}] 0x{G:X} ({GOff}), FilterVtable=[{VS}] 0x{V:X} ({VOff}).",
+                mode,
+                _traceShapeSource, traceShapeAddr.ToInt64(), FormatRelOffset(traceShapeAddr, runtimeBase),
+                _gtmSource, gtmPtrAddr.ToInt64(), FormatRelOffset(gtmPtrAddr, runtimeBase),
+                _vtableSource, vtableAddr.ToInt64(), FormatRelOffset(vtableAddr, runtimeBase));
             return true;
         }
         catch (Exception ex)
@@ -254,14 +337,42 @@ public sealed unsafe class Source2TraceEngine
         }
     }
 
+    private static IntPtr ResolveSignatureEntry(string serverPath, SignatureEntry? entry)
+    {
+        if (entry == null || string.IsNullOrWhiteSpace(entry.Pattern))
+            return IntPtr.Zero;
+
+        IntPtr match = NativeAPI.FindSignature(serverPath, entry.Pattern);
+        if (match == IntPtr.Zero) return IntPtr.Zero;
+
+        if (entry.InstrSize > 0)
+            return ResolveRipRelative(match, entry.RipOffset, entry.InstrSize);
+
+        return match;
+    }
+
+    private static string FormatRelOffset(IntPtr addr, IntPtr runtimeBase)
+    {
+        if (addr == IntPtr.Zero || runtimeBase == IntPtr.Zero) return "+?";
+        long diff = addr.ToInt64() - runtimeBase.ToInt64();
+        return diff >= 0 ? $"+0x{diff:x}" : $"-0x{-diff:x}";
+    }
+
+    private static IntPtr ResolveRipRelative(IntPtr instructionAddress, int relOffset, int instructionSize)
+    {
+        if (instructionAddress == IntPtr.Zero) return IntPtr.Zero;
+        int rel = *(int*)(instructionAddress + relOffset);
+        return instructionAddress + rel + instructionSize;
+    }
+
     /// <summary>
     /// Diagnostic self-test invoked ONLY via explicit server console/admin command `wcs_tracetest`.
     /// Tests both Line and Player-BBox Hull traces from a known map origin using 32-byte aligned native buffers.
     /// </summary>
     public string RunDiagnosticSelfTest(Vector3 testOrigin)
     {
-        if (!EnsureInitialized())
-            return "FAIL: Source2TraceEngine failed to initialize signatures.";
+        if (!EnsureInitialized(forceReinitialize: false))
+            return "FAIL: Source2TraceEngine failed to initialize symbols.";
 
         var mins = new Vector3(-16f, -16f, 0f);
         var maxs = new Vector3(16f, 16f, 72f);
@@ -281,16 +392,11 @@ public sealed unsafe class Source2TraceEngine
         var sweepEnd = hullPos + new Vector3(1500f, 0f, 0f);
         bool hullSweepOk = TryTraceInternal(ref hullRay, hullPos, sweepEnd, null, (ulong)Cs2InteractionLayers.MaskPlayerSolid, bypassEnabledCheck: true, out var hullSweepHit);
 
-        return $"OK: LineDown(ok={lineOk}, frac={lineHit.Fraction:F3}, solid={lineHit.StartInSolid}, normZ={lineHit.Normal.Z:F2}, endZ={lineHit.EndPos.Z:F1}) | " +
+        return $"OK [{_traceShapeSource}/{_gtmSource}/{_vtableSource} " +
+               $"({FormatRelOffset(_traceShapeAddr, _moduleRuntimeBase)}/{FormatRelOffset(_gameTraceManagerPtrAddr, _moduleRuntimeBase)}/{FormatRelOffset(_traceFilterVtable, _moduleRuntimeBase)})]: " +
+               $"LineDown(ok={lineOk}, frac={lineHit.Fraction:F3}, solid={lineHit.StartInSolid}, normZ={lineHit.Normal.Z:F2}, endZ={lineHit.EndPos.Z:F1}) | " +
                $"HullClear(ok={hullClearOk}, frac={hullClearHit.Fraction:F3}, solid={hullClearHit.StartInSolid}) | " +
                $"HullSweepX(ok={hullSweepOk}, frac={hullSweepHit.Fraction:F3}, solid={hullSweepHit.StartInSolid}, end=({hullSweepHit.EndPos.X:F0},{hullSweepHit.EndPos.Y:F0},{hullSweepHit.EndPos.Z:F0}))";
-    }
-
-    private static IntPtr ResolveRipRelative(IntPtr instructionAddress, int relOffset, int instructionSize)
-    {
-        if (instructionAddress == IntPtr.Zero) return IntPtr.Zero;
-        int rel = *(int*)(instructionAddress + relOffset);
-        return instructionAddress + rel + instructionSize;
     }
 
     public bool TryTraceLine(
