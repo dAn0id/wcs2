@@ -9,6 +9,7 @@ using CS2MenuManager.API.Menu;
 using WCS2.Config;
 using WCS2.Core;
 using WCS2.Data;
+using WCS2.Services;
 using WCS2.Skills;
 
 namespace WCS2.Menus;
@@ -22,6 +23,7 @@ public sealed class WcsMenuService
     private readonly ShopService _shop;
     private readonly IWcsRepository _repo;
     private readonly IEffectsService _effects;
+    private readonly UpdateService _updater;
 
     public WcsMenuService(
         BasePlugin plugin,
@@ -30,7 +32,8 @@ public sealed class WcsMenuService
         ProgressionService progression,
         ShopService shop,
         IWcsRepository repo,
-        IEffectsService effects)
+        IEffectsService effects,
+        UpdateService updater)
     {
         _plugin = plugin;
         _config = config;
@@ -39,6 +42,7 @@ public sealed class WcsMenuService
         _shop = shop;
         _repo = repo;
         _effects = effects;
+        _updater = updater;
     }
 
     public bool IsWcsAdmin(CCSPlayerController player)
@@ -456,13 +460,92 @@ public sealed class WcsMenuService
             return;
         }
 
-        var menu = CreateMenu(admin, "WCS Admin — Select Player", prev);
+        var menu = CreateMenu(admin, "WCS Admin — Select Option / Player", prev);
+        if (_updater.IsRootAdmin(admin))
+        {
+            var cached = _updater.CachedResult;
+            string updateLabel = cached is { Success: true, UpdateAvailable: true, LatestVersion: not null }
+                ? $"[ROOT] WCS2 Updates (v{cached.LatestVersion} available!)"
+                : "[ROOT] WCS2 Updates";
+            menu.AddItem(updateLabel, (a, _) => OpenUpdatesMenu(a, menu));
+        }
+
         foreach (var p in Utilities.GetPlayers().Where(x => x != null && x.IsValid && !x.IsBot && x.Connected == PlayerConnectedState.Connected))
         {
             var target = p;
             var ts = _progression.GetTypedSession(target);
             menu.AddItem($"{target.PlayerName} (Lvl {ts?.RaceLevel ?? 0})", (a, _) => OpenAdminPlayerActions(a, target, menu));
         }
+        menu.Display(admin, 30);
+    }
+
+    private void OpenUpdatesMenu(CCSPlayerController admin, IMenu? prev = null)
+    {
+        if (!_updater.IsRootAdmin(admin))
+        {
+            _effects.PrintChat(admin, "Only Root Admins (@css/root or admin_steam_ids) can manage WCS2 updates.");
+            return;
+        }
+
+        var cached = _updater.CachedResult;
+        string statusLine = _updater.IsUpdating
+            ? "Status: Update currently in progress..."
+            : cached == null
+                ? "Status: Not checked yet"
+                : cached.Success && cached.UpdateAvailable && !string.IsNullOrWhiteSpace(cached.LatestVersion)
+                    ? $"Latest: v{cached.LatestVersion} (UPDATE AVAILABLE)"
+                    : cached.Success && !string.IsNullOrWhiteSpace(cached.LatestVersion)
+                        ? $"Latest: v{cached.LatestVersion} (Up to date)"
+                        : "Status: Check failed (select to view)";
+
+        var menu = CreateMenu(admin, $"WCS2 Updates (Current v{_updater.CurrentVersion})", prev);
+        menu.AddItem($"Current Version: v{_updater.CurrentVersion}", (a, _) =>
+        {
+            _effects.PrintChat(a, $"Current WCS2 version: v{_updater.CurrentVersion}.");
+        });
+        menu.AddItem(statusLine, (a, _) =>
+        {
+            var c = _updater.CachedResult;
+            _effects.PrintChat(a, c != null ? c.StatusMessage : "No cached update check yet. Select 'Check for Updates Now'.");
+        });
+        menu.AddItem("Check for Updates Now", (a, _) =>
+        {
+            if (!_updater.IsRootAdmin(a)) return;
+            _effects.PrintChat(a, "Checking GitHub for WCS2 updates...");
+            _updater.TriggerManualCheck(a);
+        });
+        menu.AddItem("Download & Install Update + Reload", (a, _) => OpenUpdateConfirmMenu(a, menu));
+
+        menu.Display(admin, 30);
+    }
+
+    private void OpenUpdateConfirmMenu(CCSPlayerController admin, IMenu? prev = null)
+    {
+        if (!_updater.IsRootAdmin(admin))
+        {
+            _effects.PrintChat(admin, "Only Root Admins (@css/root or admin_steam_ids) can install updates.");
+            return;
+        }
+
+        if (_updater.IsUpdating)
+        {
+            _effects.PrintChat(admin, "An update is already in progress.");
+            return;
+        }
+
+        var cached = _updater.CachedResult;
+        string targetDesc = cached is { Success: true, UpdateAvailable: true, LatestVersion: not null }
+            ? $"v{cached.LatestVersion}"
+            : "Latest GitHub Release";
+
+        var menu = CreateMenu(admin, $"Confirm Update ({targetDesc}) + Reload?", prev);
+        menu.AddItem($"YES — Download, Verify & Reload ({targetDesc})", (a, _) =>
+        {
+            if (!_updater.IsRootAdmin(a)) return;
+            _updater.TriggerInstallUpdate(a);
+        });
+        menu.AddItem("Cancel", (a, _) => OpenUpdatesMenu(a, prev));
+
         menu.Display(admin, 30);
     }
 

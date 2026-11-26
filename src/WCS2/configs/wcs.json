@@ -42,6 +42,9 @@
   "admin_steam_ids": [
     76561197960265728
   ],
+  "update_check_enabled": true,
+  "github_repo": "dAn0id/wcs2",
+  "github_token": "",
   "default_barrel_model": "models/props/containers/barrels/steel_drum_barrel_01a.vmdl",
   "default_t_agent_model": "characters/models/tm_phoenix/tm_phoenix.vmdl",
   "default_ct_agent_model": "characters/models/ctm_sas/ctm_sas.vmdl"

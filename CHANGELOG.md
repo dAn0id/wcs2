@@ -4,6 +4,21 @@ All notable changes to **WCS2** are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2026-11-26 — New Skill Primitives & In-Game Updater
+
+### Added
+- **In-Game GitHub Release Updater (`UpdateService`):**
+  - Added `[ROOT] WCS2 Updates` submenu inside `!wcsadmin` (restricted to `@css/root` / `admin_steam_ids`) for checking latest GitHub releases, viewing release notes, and downloading/installing updates in-game.
+  - Added once-per-map red chat notifications for Root Admins on team join when a newer GitHub release is available (`Current WCS2 Version: ...`, `New Version: ...`).
+  - Added `wcs_update_check` console/RCON command and `wcs.json` updater configuration (`update_check_enabled`, `github_repo`, optional `github_token`).
+  - Downloads verify strict `SHA256SUMS.txt` checksums, guard against zip-slip, preserve `configs/` and `data/`, replace plugin binaries atomically, and live-reload via `css_plugins reload WCS2`.
+- **6 New Skill Primitives (40 Built-In Total):** Added `cheat_death`, `splash_damage`, `revive_teammate`, `player_scale`, `infinite_ammo`, and `instant_restock` — all wired into `SkillExecutionEngine`, documented in `README.md`, and integrated into the interactive Race Builder TUI (`wcs2-race-builder.py`).
+- **Teammate Target Selectors:** Added `nearby_teammates` (alive teammates within `radius`, excluding self) and `all_teammates` (all alive teammates, excluding self) target selectors for team-oriented skills such as `instant_restock`.
+
+### Changed
+- **Auto-Updating Bundled `.py` Tooling:** `RaceRegistry.EnsureConfigsSeeded` now automatically updates bundled `.py` scripts (`wcs2-race-builder.py`) on byte differences with `0755` permissions while continuing to leave all customized `.json` config files untouched.
+- **Clean Packaging:** Excluded `configs/**/__pycache__/**` and `configs/**/*.pyc` from `WCS2.csproj` builds and publish outputs.
+
 ## [1.0.3] - 2026-11-26 — Custom Race Builder Tool
 
 ### Added
@@ -40,6 +55,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Dash-Style Teleport Alternative:** Added the `teleport_dash` primitive (velocity launch + sound + electric/distort particles) and included a commented-out alternative in `human_alliance.json` using JSONC comment support.
 - **Automated Linux x64 Releases:** Added `.github/workflows/release.yml` to build, verify, and publish `.zip`, `.tar.gz`, and `SHA256SUMS.txt` artifacts on `v*` tags.
 
+[1.0.4]: https://github.com/dAn0id/wcs2/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/dAn0id/wcs2/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/dAn0id/wcs2/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/dAn0id/wcs2/compare/v1.0.0...v1.0.1

@@ -8,7 +8,7 @@
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <AssemblyName>WCS2</AssemblyName>
     <RootNamespace>WCS2</RootNamespace>
-    <Version>1.0.3</Version>
+    <Version>1.0.4</Version>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
   </PropertyGroup>
 
@@ -27,7 +27,7 @@
 
   <ItemGroup>
     <None Remove="configs\**\*" />
-    <None Include="configs\**\*" CopyToOutputDirectory="PreserveNewest" Link="defaults\configs\%(RecursiveDir)%(Filename)%(Extension)" Condition="Exists('configs')" />
+    <None Include="configs\**\*" Exclude="configs\**\__pycache__\**;configs\**\*.pyc" CopyToOutputDirectory="PreserveNewest" Link="defaults\configs\%(RecursiveDir)%(Filename)%(Extension)" Condition="Exists('configs')" />
   </ItemGroup>
 
 </Project>

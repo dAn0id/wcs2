@@ -518,3 +518,144 @@ public sealed class RandomEnemyDrainPrimitive : ISkillPrimitive
         }
     }
 }
+
+public sealed class CheatDeathPrimitive : ISkillPrimitive
+{
+    public string Type => "cheat_death";
+
+    public void Execute(SkillContext ctx, SkillActionConfig action)
+    {
+        var owner = ctx.Owner;
+        var pawn = SkillHelpers.GetAlivePawn(owner);
+        if (pawn == null || ctx.DamageInfo == null || pawn.Health <= 0)
+        {
+            ctx.Activated = false;
+            return;
+        }
+
+        float rawIncoming = MathF.Max(ctx.DamageDealt, ctx.DamageInfo.Damage);
+        float scaledIncoming = rawIncoming * MathF.Max(0f, ctx.DamageMultiplier);
+        if (rawIncoming < pawn.Health && scaledIncoming < pawn.Health)
+        {
+            ctx.Activated = false;
+            return;
+        }
+
+        int maxPerRound = action.GetLevelInt("max_per_round", ctx.SkillLevel, 1);
+        if (maxPerRound > 0 && ctx.Services.State.GetRoundProcCount(owner.Slot, "cheat_death") >= maxPerRound)
+        {
+            ctx.Activated = false;
+            return;
+        }
+
+        if (SkillHelpers.HasKey(action, "chance"))
+        {
+            float extraChance = Math.Clamp(action.GetLevelFloat("chance", ctx.SkillLevel, 100f), 0f, 100f);
+            if (!SkillHelpers.RollChance(ctx.Services.Rng, extraChance))
+            {
+                ctx.Activated = false;
+                return;
+            }
+        }
+
+        int surviveHp = Math.Clamp(action.GetLevelInt("survive_hp", ctx.SkillLevel, 1), 1, Math.Max(1, pawn.MaxHealth));
+        float invulnDuration = MathF.Max(0f, action.GetLevelFloat("invuln_duration", ctx.SkillLevel, 0.35f));
+
+        ctx.CancelDamage = true;
+        ctx.Services.State.SetHealth(owner, surviveHp, add: false, updateMaxHealth: false);
+        if (invulnDuration > 0f)
+        {
+            ctx.Services.State.SetGodMode(owner, true, invulnDuration);
+        }
+
+        ctx.Services.State.IncrementRoundProcCount(owner.Slot, "cheat_death");
+
+        string msg = action.GetString("message", "Cheat Death saved you with {value} HP!");
+        if (!string.IsNullOrEmpty(msg))
+        {
+            string hpStr = surviveHp.ToString();
+            ctx.Services.Effects.PrintCenter(owner, SkillHelpers.FormatMessage(msg, ctx, value: hpStr, amount: hpStr));
+        }
+
+        var origin = SkillHelpers.CloneOrigin(owner);
+        if (origin != null)
+        {
+            ctx.Services.Effects.DrawBeamRing(origin, 60f, Color.FromArgb(230, 255, 225, 110), 3.0f, 0.8f, 16, 20f);
+        }
+
+        ctx.Activated = true;
+    }
+}
+
+public sealed class SplashDamagePrimitive : ISkillPrimitive
+{
+    public string Type => "splash_damage";
+
+    public void Execute(SkillContext ctx, SkillActionConfig action)
+    {
+        if (ctx.IsSkillDamage || ctx.DamageDealt <= 0f || !SkillHelpers.IsAlive(ctx.Owner) || ctx.Victim == null)
+            return;
+
+        var victimOrigin = SkillHelpers.CloneOrigin(ctx.Victim);
+        if (victimOrigin == null)
+            return;
+
+        float percent = MathF.Max(0f, action.GetLevelFloat("percent", ctx.SkillLevel, 35f));
+        if (percent <= 0f)
+            return;
+
+        float baseSplash = ctx.DamageDealt * (percent / 100f);
+        float minDamage = MathF.Max(0f, action.GetLevelFloat("min_damage", ctx.SkillLevel, 1f));
+        float maxDamage = MathF.Max(0f, action.GetLevelFloat("max_damage", ctx.SkillLevel, 0f));
+        if (maxDamage > 0f)
+            baseSplash = MathF.Min(baseSplash, maxDamage);
+        if (baseSplash < minDamage)
+            baseSplash = minDamage;
+
+        float radius = MathF.Max(1f, action.GetLevelFloat("radius", ctx.SkillLevel, 200f));
+        bool falloff = action.GetBool("falloff", false);
+        string weaponHint = action.GetString("weapon_hint", string.IsNullOrEmpty(ctx.WeaponName) ? "hegrenade" : ctx.WeaponName);
+
+        bool ffa = ctx.Services.Config.FfaEnabled || ctx.Services.Sessions.IsFriendlyFireAllowed();
+        CsTeam? enemyTeam = ffa ? null : SkillHelpers.GetEnemyTeam(ctx.Owner.Team);
+        if (!ffa && enemyTeam == null)
+            return;
+
+        var candidates = ctx.Services.Combat.GetPlayersInRadius(victimOrigin, radius, teamFilter: enemyTeam, exclude: ctx.Owner, aliveOnly: true);
+        int primaryVictimSlot = ctx.Victim.Slot;
+        int hitCount = 0;
+
+        foreach (var enemy in candidates)
+        {
+            if (!SkillHelpers.IsAlive(enemy) || enemy.Slot == primaryVictimSlot || enemy.Slot == ctx.Owner.Slot)
+                continue;
+
+            float dmg = baseSplash;
+            if (falloff)
+            {
+                var enemyPos = SkillHelpers.CloneOrigin(enemy);
+                if (enemyPos != null)
+                {
+                    float dx = enemyPos.X - victimOrigin.X;
+                    float dy = enemyPos.Y - victimOrigin.Y;
+                    float dz = enemyPos.Z - victimOrigin.Z;
+                    float dist = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+                    float factor = Math.Clamp(1f - (dist / radius), 0.1f, 1f);
+                    dmg = MathF.Max(minDamage, baseSplash * factor);
+                }
+            }
+
+            if (dmg <= 0f)
+                continue;
+
+            ctx.Services.Combat.DealDamage(enemy, ctx.Owner, dmg, weaponHint, ignoreArmor: false, isSkillDamage: true);
+            hitCount++;
+        }
+
+        if (hitCount > 0 && (action.Params.ContainsKey("ring_color") || action.Params.ContainsKey("r")))
+        {
+            Color ringColor = SkillHelpers.ReadColor(action, "ring_color", Color.FromArgb(220, 255, 140, 40));
+            ctx.Services.Effects.DrawBeamRing(victimOrigin, MathF.Min(radius, 255f), ringColor, 2.5f, 0.6f, 16, 18f);
+        }
+    }
+}

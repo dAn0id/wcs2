@@ -171,6 +171,11 @@ public interface IPlayerStateManager
     void SetAttackSpeed(CCSPlayerController player, float multiplier, float duration = 0f);
     void SetNoRecoil(CCSPlayerController player, bool enabled, float duration = 0f);
     void SetFov(CCSPlayerController player, uint fov, float duration = 0f);
+    void SetScale(CCSPlayerController player, float scale, float durationSeconds = 0f);
+    void SetInfiniteAmmo(CCSPlayerController player, float chancePercent, float durationSeconds = 0f);
+    float GetInfiniteAmmoChance(int slot);
+    int GetRoundProcCount(int slot, string key);
+    int IncrementRoundProcCount(int slot, string key);
     void SetPropDisguise(CCSPlayerController player, string modelPath);
     void ClearPropDisguise(CCSPlayerController player);
     void TrackSpawnedEntity(CCSPlayerController player, CBaseEntity entity);

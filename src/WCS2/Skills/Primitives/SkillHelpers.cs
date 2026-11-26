@@ -296,4 +296,106 @@ internal static class SkillHelpers
 
     public static bool HasKey(SkillActionConfig action, string key)
         => action.LevelValues.ContainsKey(key) || action.Params.ContainsKey(key);
+
+    public static List<CCSPlayerController> ResolveTargets(SkillContext ctx, string targetSelector, float radius = 300f)
+    {
+        var result = new List<CCSPlayerController>();
+        string sel = string.IsNullOrWhiteSpace(targetSelector) ? "self" : targetSelector.Trim().ToLowerInvariant();
+
+        switch (sel)
+        {
+            case "nearby_teammates":
+            case "nearby_allies":
+            {
+                if (!IsAlive(ctx.Owner) || !IsPlayableTeam(ctx.Owner.Team))
+                    return result;
+                var origin = CloneOrigin(ctx.Owner);
+                if (origin == null)
+                    return result;
+                var mates = ctx.Services.Combat.GetPlayersInRadius(origin, MathF.Max(1f, radius), teamFilter: ctx.Owner.Team, exclude: ctx.Owner, aliveOnly: true);
+                foreach (var m in mates)
+                {
+                    if (IsAlive(m) && m.Slot != ctx.Owner.Slot)
+                        result.Add(m);
+                }
+                return result;
+            }
+
+            case "all_teammates":
+            case "all_allies":
+            {
+                if (!IsValidPlayer(ctx.Owner) || !IsPlayableTeam(ctx.Owner.Team))
+                    return result;
+                foreach (var m in ctx.Services.Sessions.GetAlivePlayers(ctx.Owner.Team))
+                {
+                    if (IsAlive(m) && m.Slot != ctx.Owner.Slot)
+                        result.Add(m);
+                }
+                return result;
+            }
+
+            case "nearby_enemies":
+            {
+                if (!IsValidPlayer(ctx.Owner))
+                    return result;
+                var origin = CloneOrigin(ctx.Owner);
+                if (origin == null)
+                    return result;
+                bool ffa = ctx.Services.Config.FfaEnabled || ctx.Services.Sessions.IsFriendlyFireAllowed();
+                CsTeam? enemyTeam = ffa ? null : GetEnemyTeam(ctx.Owner.Team);
+                if (!ffa && enemyTeam == null)
+                    return result;
+                foreach (var e in ctx.Services.Combat.GetPlayersInRadius(origin, MathF.Max(1f, radius), teamFilter: enemyTeam, exclude: ctx.Owner, aliveOnly: true))
+                {
+                    if (IsAlive(e) && e.Slot != ctx.Owner.Slot)
+                        result.Add(e);
+                }
+                return result;
+            }
+
+            case "all":
+            {
+                foreach (var p in ctx.Services.Sessions.GetAlivePlayers(null))
+                {
+                    if (IsAlive(p))
+                        result.Add(p);
+                }
+                return result;
+            }
+
+            default:
+            {
+                var single = ctx.ResolveSingleTarget(sel);
+                if (IsAlive(single))
+                    result.Add(single!);
+                return result;
+            }
+        }
+    }
+
+    public static bool PlayerHasWeapon(CCSPlayerController player, IWeaponService weapons, string weaponName)
+    {
+        var pawn = GetAlivePawn(player);
+        var myWeapons = pawn?.WeaponServices?.MyWeapons;
+        if (myWeapons == null)
+            return false;
+
+        string targetNorm = weapons.NormalizeWeaponName(weaponName).ToLowerInvariant();
+        bool targetIsKnife = IsKnifeWeapon(targetNorm);
+
+        foreach (var handle in myWeapons)
+        {
+            var wep = handle.Value;
+            if (wep is not { IsValid: true })
+                continue;
+
+            string actual = weapons.NormalizeWeaponName(wep.DesignerName).ToLowerInvariant();
+            if (targetIsKnife && IsKnifeWeapon(actual))
+                return true;
+            if (string.Equals(actual, targetNorm, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
 }

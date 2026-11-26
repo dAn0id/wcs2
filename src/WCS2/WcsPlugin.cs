@@ -19,7 +19,7 @@ namespace WCS2;
 public sealed class WcsPlugin : BasePlugin, ISkillServices
 {
     public override string ModuleName => "WCS2";
-    public override string ModuleVersion => "1.0.3";
+    public override string ModuleVersion => "1.0.4";
     public override string ModuleAuthor => "dAn!EL";
     public override string ModuleDescription => "Warcraft:Source (WCS) RPG mod for CS2 CounterStrikeSharp";
 
@@ -35,6 +35,7 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
     private TeleportService _teleport = null!;
     private ShopService _shop = null!;
     private BotRaceService _bots = null!;
+    private UpdateService _updater = null!;
     private WcsMenuService _menus = null!;
     private ISkillExecutionEngine _engine = null!;
     private readonly Random _rng = new();
@@ -74,8 +75,9 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
         _teleport = new TeleportService(_weapons, _tracer, _rng);
         _shop = new ShopService(_registry, _progression, _effects);
         _bots = new BotRaceService(_config, _registry, _progression, _rng);
+        _updater = new UpdateService(this, _config, Logger);
         ReloadMenuManagerConfig();
-        _menus = new WcsMenuService(this, _config, _registry, _progression, _shop, _repo, _effects);
+        _menus = new WcsMenuService(this, _config, _registry, _progression, _shop, _repo, _effects, _updater);
 
         _engine = new SkillExecutionEngine(this);
         _shop.BindEngine(_engine);
@@ -107,6 +109,7 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
     public override void Unload(bool hotReload)
     {
         VirtualFunctions.CCSPlayer_ItemServices_CanAcquireFunc.Unhook(OnCanAcquire, HookMode.Pre);
+        _updater?.Dispose();
 
         foreach (var p in Utilities.GetPlayers())
         {
@@ -144,6 +147,11 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
         RegisterListener<Listeners.OnPlayerTakeDamagePre>(OnPlayerTakeDamagePre);
 
         RegisterListener<Listeners.CheckTransmit>(OnCheckTransmit);
+
+        RegisterListener<Listeners.OnMapStart>(_ =>
+        {
+            _updater.OnMapStart();
+        });
 
         RegisterListener<Listeners.OnMapEnd>(() =>
         {
@@ -184,6 +192,17 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
                 if (session != null) _engine.CleanupPlayer(player, session);
                 _state.ResetTransientState(player, isDisconnect: false);
                 _weapons.ClearRestrictions(player);
+
+                if (!player.IsBot && (ev.Team == (int)CsTeam.Terrorist || ev.Team == (int)CsTeam.CounterTerrorist))
+                {
+                    int slot = player.Slot;
+                    AddTimer(1.5f, () =>
+                    {
+                        var p = Utilities.GetPlayerFromSlot(slot);
+                        if (p != null && p.IsValid && !p.IsBot)
+                            _updater.NotifyRootAdminOnTeamJoin(p);
+                    }, TimerFlags.STOP_ON_MAPCHANGE);
+                }
             }
             return HookResult.Continue;
         });
@@ -353,8 +372,43 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
 
         RegisterEventHandler<EventWeaponFire>((ev, _) =>
         {
-            if (ev.Userid != null && ev.Userid.IsValid)
-                _state.OnWeaponFire(ev.Userid);
+            var player = ev.Userid;
+            if (player != null && player.IsValid)
+            {
+                _state.OnWeaponFire(player);
+
+                float infChance = _state.GetInfiniteAmmoChance(player.Slot);
+                if (infChance > 0f && PlayerStateManager.TryGetAlivePawn(player, out var firePawn))
+                {
+                    if (_rng.NextDouble() * 100.0 < infChance)
+                    {
+                        var weapon = firePawn.WeaponServices?.ActiveWeapon?.Value;
+                        if (weapon != null && weapon.IsValid)
+                        {
+                            string wName = weapon.DesignerName ?? string.Empty;
+                            bool isExcluded = wName.Contains("knife", StringComparison.OrdinalIgnoreCase)
+                                              || wName.Contains("bayonet", StringComparison.OrdinalIgnoreCase)
+                                              || wName.Contains("grenade", StringComparison.OrdinalIgnoreCase)
+                                              || wName.Contains("molotov", StringComparison.OrdinalIgnoreCase)
+                                              || wName.Contains("flashbang", StringComparison.OrdinalIgnoreCase)
+                                              || wName.Contains("decoy", StringComparison.OrdinalIgnoreCase)
+                                              || wName.Equals("weapon_c4", StringComparison.OrdinalIgnoreCase)
+                                              || wName.Equals("weapon_taser", StringComparison.OrdinalIgnoreCase)
+                                              || wName.Equals("weapon_healthshot", StringComparison.OrdinalIgnoreCase);
+
+                            if (!isExcluded)
+                            {
+                                int maxClip = weapon.VData?.MaxClip1 ?? 0;
+                                if (maxClip > 0 && weapon.Clip1 >= 0 && weapon.Clip1 < maxClip)
+                                {
+                                    weapon.Clip1 += 1;
+                                    Utilities.SetStateChanged(weapon, "CBasePlayerWeapon", "m_iClip1");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             return HookResult.Continue;
         });
 
@@ -387,6 +441,7 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
 
         RegisterEventHandler<EventRoundStart>((ev, _) =>
         {
+            _state.ClearAllRoundProcCounts();
             _engine.OnRoundStart();
             foreach (var p in Utilities.GetPlayers())
             {
@@ -740,6 +795,7 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
             string configDir = Path.Combine(ModuleDirectory, "configs");
             _registry.EnsureConfigsSeeded(ModuleDirectory);
             _config = _registry.LoadConfig(configDir);
+            _updater.UpdateConfig(_config);
             _registry.LoadAll(configDir);
             var gamedata = GamedataConfig.Load(configDir, Logger);
             _tracer.Reload(_config.UseNativeTrace, gamedata);
@@ -747,6 +803,22 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
             string msg = $"Reloaded WCS: {_registry.Races.Count} races, {_registry.Items.Count} items (use_native_trace={_config.UseNativeTrace}, gamedata_mode={gamedata.ResolutionMode}, tracer_available={_tracer.IsAvailable}).";
             if (p != null) _effects.PrintChat(p, msg);
             else Logger.LogInformation("[WCS2] {Msg}", msg);
+        });
+
+        // Root-Admin / console command to trigger an immediate async GitHub update check
+        AddCommand("wcs_update_check", "Check GitHub for WCS2 updates (console/root-admin only)", (p, _) =>
+        {
+            if (p != null && !_updater.IsRootAdmin(p))
+            {
+                _effects.PrintChat(p, "Only Root Admins (@css/root or admin_steam_ids) can check for updates.");
+                return;
+            }
+            if (p != null)
+                _effects.PrintChat(p, "Checking GitHub for WCS2 updates...");
+            else
+                Logger.LogInformation("[WCS2] Checking GitHub for updates...");
+
+            _updater.TriggerManualCheck(p);
         });
 
         // Diagnostic command (server console or WCS admin) to safely verify aligned Source2TraceEngine live

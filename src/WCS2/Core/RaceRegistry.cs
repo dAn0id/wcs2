@@ -31,7 +31,8 @@ public sealed class RaceRegistry
 
     /// <summary>
     /// Copies missing default config files from defaults/configs/ into configs/ without
-    /// ever overwriting existing admin-customized files.
+    /// ever overwriting existing admin-customized .json/config files, while automatically
+    /// keeping bundled .py helper scripts (e.g. wcs2-race-builder.py) up to date.
     /// </summary>
     public void EnsureConfigsSeeded(string moduleDirectory)
     {
@@ -41,6 +42,7 @@ public sealed class RaceRegistry
 
         string targetDir = Path.Combine(moduleDirectory, "configs");
         int seeded = 0;
+        int updatedScripts = 0;
 
         try
         {
@@ -48,15 +50,24 @@ public sealed class RaceRegistry
             {
                 string relPath = Path.GetRelativePath(defaultsDir, srcPath);
                 string destPath = Path.Combine(targetDir, relPath);
-                if (File.Exists(destPath))
-                    continue;
+                bool isPythonScript = destPath.EndsWith(".py", StringComparison.OrdinalIgnoreCase);
+                bool exists = File.Exists(destPath);
+
+                if (exists)
+                {
+                    if (!isPythonScript)
+                        continue;
+
+                    if (File.ReadAllBytes(srcPath).AsSpan().SequenceEqual(File.ReadAllBytes(destPath)))
+                        continue;
+                }
 
                 string? destParent = Path.GetDirectoryName(destPath);
                 if (!string.IsNullOrEmpty(destParent))
                     Directory.CreateDirectory(destParent);
 
-                File.Copy(srcPath, destPath, overwrite: false);
-                if (OperatingSystem.IsLinux() && destPath.EndsWith(".py", StringComparison.OrdinalIgnoreCase))
+                File.Copy(srcPath, destPath, overwrite: exists);
+                if (OperatingSystem.IsLinux() && isPythonScript)
                 {
                     File.SetUnixFileMode(
                         destPath,
@@ -64,12 +75,21 @@ public sealed class RaceRegistry
                         UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
                         UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
                 }
-                seeded++;
+
+                if (exists)
+                    updatedScripts++;
+                else
+                    seeded++;
             }
 
             if (seeded > 0)
             {
                 _logger.LogInformation("[WCS2] Seeded {Count} missing default config file(s) into configs/.", seeded);
+            }
+
+            if (updatedScripts > 0)
+            {
+                _logger.LogInformation("[WCS2] Updated {Count} bundled tool script(s) in configs/.", updatedScripts);
             }
         }
         catch (Exception ex)

@@ -458,3 +458,60 @@ public sealed class GiveLevelsPrimitive : ISkillPrimitive
         }
     }
 }
+
+public sealed class PlayerScalePrimitive : ISkillPrimitive
+{
+    public string Type => "player_scale";
+
+    public void Execute(SkillContext ctx, SkillActionConfig action)
+    {
+        var target = ctx.ResolveSingleTarget(action.Target);
+        if (!SkillHelpers.IsAlive(target))
+        {
+            ctx.Activated = false;
+            return;
+        }
+
+        float scale = Math.Clamp(action.GetLevelFloat("scale", ctx.SkillLevel, 0.8f), 0.4f, 2.0f);
+        float duration = MathF.Max(0f, action.GetLevelFloat("duration", ctx.SkillLevel, 0f));
+
+        ctx.Services.State.SetScale(target!, scale, duration);
+
+        string msg = action.GetString("message");
+        if (!string.IsNullOrEmpty(msg))
+        {
+            string valStr = scale.ToString("0.##");
+            string pctStr = ((int)Math.Round(scale * 100f)).ToString();
+            string durStr = duration.ToString("0.#");
+            ctx.Services.Effects.PrintChat(target!, SkillHelpers.FormatMessage(msg, ctx, value: valStr, pct: pctStr, duration: durStr));
+        }
+    }
+}
+
+public sealed class InfiniteAmmoPrimitive : ISkillPrimitive
+{
+    public string Type => "infinite_ammo";
+
+    public void Execute(SkillContext ctx, SkillActionConfig action)
+    {
+        var target = ctx.ResolveSingleTarget(action.Target);
+        if (!SkillHelpers.IsAlive(target))
+        {
+            ctx.Activated = false;
+            return;
+        }
+
+        float chance = Math.Clamp(action.GetLevelFloat("chance", ctx.SkillLevel, 50f), 0f, 100f);
+        float duration = MathF.Max(0f, action.GetLevelFloat("duration", ctx.SkillLevel, 0f));
+
+        ctx.Services.State.SetInfiniteAmmo(target!, chance, duration);
+
+        string msg = action.GetString("message");
+        if (!string.IsNullOrEmpty(msg))
+        {
+            string chanceStr = ((int)Math.Round(chance)).ToString();
+            string durStr = duration.ToString("0.#");
+            ctx.Services.Effects.PrintChat(target!, SkillHelpers.FormatMessage(msg, ctx, value: chanceStr, chance: chanceStr, duration: durStr));
+        }
+    }
+}

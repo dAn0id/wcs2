@@ -1,4 +1,5 @@
 using System.Drawing;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Timers;
 using CounterStrikeSharp.API.Modules.Utils;
@@ -396,6 +397,98 @@ public sealed class RespawnPrimitive : ISkillPrimitive
                 services.Effects.PrintCenter(owner, "You have been reincarnated!");
             }
         }, TimerFlags.STOP_ON_MAPCHANGE);
+    }
+}
+
+public sealed class ReviveTeammatePrimitive : ISkillPrimitive
+{
+    private readonly RoundTracker _roundTracker;
+
+    internal ReviveTeammatePrimitive(RoundTracker roundTracker)
+    {
+        _roundTracker = roundTracker;
+    }
+
+    public string Type => "revive_teammate";
+
+    public void Execute(SkillContext ctx, SkillActionConfig action)
+    {
+        var owner = ctx.Owner;
+        if (!SkillHelpers.IsValidPlayer(owner) || !SkillHelpers.IsPlayableTeam(owner.Team) || !_roundTracker.IsRoundActive)
+        {
+            ctx.Activated = false;
+            return;
+        }
+
+        var deadMates = Utilities.GetPlayers()
+            .Where(p => p is { IsValid: true }
+                && p.Connected == PlayerConnectedState.Connected
+                && !p.PawnIsAlive
+                && p.Team == owner.Team
+                && p.Slot != owner.Slot
+                && !ctx.Services.State.GetCustomData<bool>(p, SkillStateKeys.PendingRespawn))
+            .ToList();
+
+        if (deadMates.Count == 0)
+        {
+            ctx.Activated = false;
+            ctx.Services.Effects.PrintChat(owner, "No dead teammates to revive!");
+            return;
+        }
+
+        int count = Math.Max(1, action.GetLevelInt("count", ctx.SkillLevel, 1));
+        bool atCaster = action.GetBool("at_caster", false);
+        int spawnHp = action.GetLevelInt("health", ctx.SkillLevel, 0);
+        Vector? casterOrigin = atCaster ? SkillHelpers.CloneOrigin(owner) : null;
+
+        // Fisher-Yates shuffle for fair random selection
+        var rng = ctx.Services.Rng;
+        for (int i = deadMates.Count - 1; i > 0; i--)
+        {
+            int j = rng.Next(i + 1);
+            (deadMates[i], deadMates[j]) = (deadMates[j], deadMates[i]);
+        }
+
+        int revived = 0;
+        var services = ctx.Services;
+        foreach (var mate in deadMates)
+        {
+            if (revived >= count)
+                break;
+
+            if (!services.Teleport.RespawnPlayer(mate, atOrigin: casterOrigin))
+                continue;
+
+            revived++;
+            if (spawnHp > 0)
+            {
+                var targetMate = mate;
+                services.RunNextFrame(() =>
+                {
+                    if (SkillHelpers.IsAlive(targetMate))
+                        services.State.SetHealth(targetMate, spawnHp, add: false, updateMaxHealth: true);
+                });
+            }
+
+            services.Effects.PrintChat(owner, $"Revived teammate {mate.PlayerName}!");
+            services.Effects.PrintChat(mate, $"You were revived by {owner.PlayerName}!");
+            services.Effects.PrintCenter(mate, $"Revived by {owner.PlayerName}!");
+
+            var fxOrigin = SkillHelpers.CloneOrigin(mate) ?? casterOrigin;
+            if (fxOrigin != null)
+            {
+                services.Effects.DrawBeamRing(fxOrigin, 80f, Color.FromArgb(220, 80, 255, 160), 3.0f, 1.0f, 16, 20f);
+            }
+        }
+
+        if (revived == 0)
+        {
+            ctx.Activated = false;
+            services.Effects.PrintChat(owner, "Could not revive any teammate.");
+            return;
+        }
+
+        ctx.Activated = true;
     }
 }
 

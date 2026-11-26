@@ -134,6 +134,17 @@ public sealed class WcsConfig
     [JsonPropertyName("admin_steam_ids")]
     public List<ulong> AdminSteamIds { get; set; } = new();
 
+    // In-Game GitHub Release Updater
+    [JsonPropertyName("update_check_enabled")]
+    public bool UpdateCheckEnabled { get; set; } = true;
+
+    [JsonPropertyName("github_repo")]
+    public string GitHubRepo { get; set; } = "dAn0id/wcs2";
+
+    // Optional read-only token for private GitHub repositories; leave empty for public repos.
+    [JsonPropertyName("github_token")]
+    public string GitHubToken { get; set; } = string.Empty;
+
     // Stock CS2 model paths used by prop disguises / mole / spawned props
     [JsonPropertyName("default_barrel_model")]
     public string DefaultBarrelModel { get; set; } = "models/props/containers/barrels/steel_drum_barrel_01a.vmdl";

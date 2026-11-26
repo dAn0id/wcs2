@@ -179,3 +179,131 @@ public sealed class MessagePrimitive : ISkillPrimitive
             ctx.Services.Effects.PrintChat(target!, formatted);
     }
 }
+
+public sealed class InstantRestockPrimitive : ISkillPrimitive
+{
+    private readonly RoundTracker _roundTracker;
+
+    internal InstantRestockPrimitive(RoundTracker roundTracker)
+    {
+        _roundTracker = roundTracker;
+    }
+
+    public string Type => "instant_restock";
+
+    public void Execute(SkillContext ctx, SkillActionConfig action)
+    {
+        var owner = ctx.Owner;
+        if (!SkillHelpers.IsAlive(owner))
+        {
+            ctx.Activated = false;
+            return;
+        }
+
+        var services = ctx.Services;
+        string rawWeapon = action.GetString("weapon", "weapon_hegrenade");
+        if (string.IsNullOrWhiteSpace(rawWeapon))
+            rawWeapon = "weapon_hegrenade";
+        string weapon = services.Weapons.NormalizeWeaponName(rawWeapon);
+
+        float interval = action.GetLevelFloat("interval", ctx.SkillLevel, 10f);
+        float duration = MathF.Max(0f, action.GetLevelFloat("duration", ctx.SkillLevel, 0f));
+        bool onlyIfMissing = action.GetBool("only_if_missing", true);
+        bool immediate = action.GetBool("immediate", true);
+        int maxGrants = Math.Max(0, action.GetLevelInt("max_grants", ctx.SkillLevel, 0));
+        float radius = MathF.Max(1f, action.GetLevelFloat("radius", ctx.SkillLevel, 300f));
+        string msg = action.GetString("message");
+        string targetSelector = string.IsNullOrWhiteSpace(action.Target) ? "self" : action.Target;
+
+        int GrantOnce()
+        {
+            var targets = SkillHelpers.ResolveTargets(ctx, targetSelector, radius);
+            int granted = 0;
+            foreach (var target in targets)
+            {
+                if (!SkillHelpers.IsAlive(target))
+                    continue;
+                if (onlyIfMissing && SkillHelpers.PlayerHasWeapon(target, services.Weapons, weapon))
+                    continue;
+
+                services.Weapons.GiveWeapon(target, weapon);
+                granted++;
+
+                if (!string.IsNullOrEmpty(msg))
+                {
+                    services.Effects.PrintChat(target, SkillHelpers.FormatMessage(msg, ctx, value: weapon));
+                }
+            }
+            return granted;
+        }
+
+        // One-shot mode (interval <= 0): grant immediately once with no repeating timer
+        if (interval <= 0f)
+        {
+            int granted = GrantOnce();
+            if (granted == 0 && (ctx.Trigger == SkillTrigger.PlayerUltimate || ctx.Trigger == SkillTrigger.PlayerAbility))
+            {
+                ctx.Activated = false;
+                services.Effects.PrintChat(owner, "No eligible targets to restock!");
+            }
+            return;
+        }
+
+        // Repeating restock timer mode
+        float safeInterval = MathF.Max(0.5f, interval);
+        string tag = $"restock_{ctx.Skill?.Key ?? "item"}_{weapon}";
+        int capturedRound = _roundTracker.CurrentRoundId;
+        int grantsSoFar = 0;
+        float elapsed = 0f;
+        bool stopped = false;
+
+        // Replace any previous restock timer with the same tag on this player
+        services.State.CancelPlayerTimers(owner, tag);
+
+        if (immediate)
+        {
+            if (GrantOnce() > 0)
+                grantsSoFar++;
+
+            if (maxGrants > 0 && grantsSoFar >= maxGrants)
+                return;
+        }
+
+        // SchedulePlayerTimer creates TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE
+        // and automatically cleans up on death, round end, race change, and disconnect.
+        services.State.SchedulePlayerTimer(owner, safeInterval, () =>
+        {
+            if (stopped)
+                return;
+
+            elapsed += safeInterval;
+            if (capturedRound != _roundTracker.CurrentRoundId
+                || !_roundTracker.IsRoundActive
+                || !SkillHelpers.IsAlive(owner))
+            {
+                stopped = true;
+                if (SkillHelpers.IsValidPlayer(owner))
+                    services.State.CancelPlayerTimers(owner, tag);
+                return;
+            }
+
+            if ((duration > 0f && elapsed > duration + 0.01f)
+                || (maxGrants > 0 && grantsSoFar >= maxGrants))
+            {
+                stopped = true;
+                services.State.CancelPlayerTimers(owner, tag);
+                return;
+            }
+
+            if (GrantOnce() > 0)
+                grantsSoFar++;
+
+            if ((maxGrants > 0 && grantsSoFar >= maxGrants)
+                || (duration > 0f && elapsed >= duration))
+            {
+                stopped = true;
+                services.State.CancelPlayerTimers(owner, tag);
+            }
+        }, repeat: true, tag: tag);
+    }
+}

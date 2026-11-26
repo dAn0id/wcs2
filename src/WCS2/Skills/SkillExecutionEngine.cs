@@ -34,6 +34,8 @@ public sealed class SkillExecutionEngine : ISkillExecutionEngine
         RegisterPrimitive(new RegenPrimitive(_roundTracker));
         RegisterPrimitive(new SetUltimateCooldownPrimitive());
         RegisterPrimitive(new GiveLevelsPrimitive());
+        RegisterPrimitive(new PlayerScalePrimitive());
+        RegisterPrimitive(new InfiniteAmmoPrimitive());
 
         RegisterPrimitive(new BonusDamagePrimitive());
         RegisterPrimitive(new ReflectDamagePrimitive());
@@ -43,6 +45,8 @@ public sealed class SkillExecutionEngine : ISkillExecutionEngine
         RegisterPrimitive(new StealCashPrimitive());
         RegisterPrimitive(new CashToHealthPrimitive());
         RegisterPrimitive(new RandomEnemyDrainPrimitive());
+        RegisterPrimitive(new CheatDeathPrimitive());
+        RegisterPrimitive(new SplashDamagePrimitive());
 
         RegisterPrimitive(new FreezePrimitive());
         RegisterPrimitive(new AoEFreezePrimitive());
@@ -50,12 +54,14 @@ public sealed class SkillExecutionEngine : ISkillExecutionEngine
         RegisterPrimitive(new TeleportPrimitive());
         RegisterPrimitive(new TeleportDashPrimitive());
         RegisterPrimitive(new RespawnPrimitive(_roundTracker));
+        RegisterPrimitive(new ReviveTeammatePrimitive(_roundTracker));
         RegisterPrimitive(new ShakePrimitive());
         RegisterPrimitive(new FadePrimitive());
 
         RegisterPrimitive(new GiveWeaponPrimitive());
         RegisterPrimitive(new DropWeaponPrimitive());
         RegisterPrimitive(new SetClipAmmoPrimitive());
+        RegisterPrimitive(new InstantRestockPrimitive(_roundTracker));
         RegisterPrimitive(new BeamPrimitive());
         RegisterPrimitive(new BeamRingPrimitive());
         RegisterPrimitive(new SoundPrimitive());

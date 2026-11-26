@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Globalization;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Entities.Constants;
@@ -29,12 +30,17 @@ public sealed class PlayerStateManager : IPlayerStateManager
         public bool NoBlockEnabled { get; set; }
         public float AttackSpeedMultiplier { get; set; } = 1.0f;
         public bool NoRecoilEnabled { get; set; }
+        public float Scale { get; set; } = 1.0f;
+        public float BaseScale { get; set; } = 1.0f;
+        public float PassiveInfiniteAmmoChance { get; set; } = 0f;
+        public float TimedInfiniteAmmoChance { get; set; } = 0f;
         public bool HiddenFromEnemies { get; set; }
         public CDynamicProp? DisguiseProp { get; set; }
         public uint DisguisePropIndex { get; set; }
         public List<(string? Tag, CounterStrikeSharp.API.Modules.Timers.Timer Timer)> Timers { get; } = new();
         public List<CBaseEntity> SpawnedEntities { get; } = new();
         public Dictionary<string, object?> CustomData { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, int> RoundProcCounts { get; } = new(StringComparer.OrdinalIgnoreCase);
     }
 
     private readonly BasePlugin _plugin;
@@ -115,6 +121,11 @@ public sealed class PlayerStateManager : IPlayerStateManager
                 Utilities.SetStateChanged(pawn, "CBaseEntity", "m_Collision");
             }
 
+            if (MathF.Abs(state.Scale - 1.0f) > 0.001f)
+            {
+                ApplyScale(pawn, 1.0f);
+            }
+
             ApplyRenderToPlayerAndGear(pawn, Color.FromArgb(255, 255, 255, 255));
 
             player.DesiredFOV = 90;
@@ -142,8 +153,13 @@ public sealed class PlayerStateManager : IPlayerStateManager
             state.NoBlockEnabled = false;
             state.AttackSpeedMultiplier = 1.0f;
             state.NoRecoilEnabled = false;
+            state.Scale = 1.0f;
+            state.BaseScale = 1.0f;
+            state.PassiveInfiniteAmmoChance = 0f;
+            state.TimedInfiniteAmmoChance = 0f;
             state.HiddenFromEnemies = false;
             state.CustomData.Clear();
+            state.RoundProcCounts.Clear();
         }
     }
 
@@ -528,6 +544,101 @@ public sealed class PlayerStateManager : IPlayerStateManager
                 }
             }, repeat: false, tag: "fov_temp");
         }
+    }
+
+    public void SetScale(CCSPlayerController player, float scale, float durationSeconds = 0f)
+    {
+        if (!TryGetAlivePawn(player, out var pawn)) return;
+        float clamped = Math.Clamp(scale, 0.4f, 2.0f);
+        var state = GetOrCreate(player.Slot);
+
+        CancelPlayerTimers(player, "scale_temp");
+        state.Scale = clamped;
+        if (durationSeconds <= 0f)
+        {
+            state.BaseScale = clamped;
+        }
+        ApplyScale(pawn, clamped);
+
+        if (durationSeconds > 0f)
+        {
+            int slot = player.Slot;
+            SchedulePlayerTimer(player, durationSeconds, () =>
+            {
+                if (!_states.TryGetValue(slot, out var st)) return;
+                float restore = st.BaseScale;
+                st.Scale = restore;
+                var p = Utilities.GetPlayerFromSlot(slot);
+                if (TryGetAlivePawn(p, out var livePawn))
+                {
+                    ApplyScale(livePawn, restore);
+                }
+            }, repeat: false, tag: "scale_temp");
+        }
+    }
+
+    private static void ApplyScale(CCSPlayerPawn pawn, float scale)
+    {
+        var skel = pawn.CBodyComponent?.SceneNode?.GetSkeletonInstance();
+        if (skel != null)
+        {
+            skel.Scale = scale;
+        }
+        Utilities.SetStateChanged(pawn, "CBaseEntity", "m_CBodyComponent");
+        pawn.AcceptInput("SetScale", null, null, scale.ToString(CultureInfo.InvariantCulture));
+    }
+
+    public void SetInfiniteAmmo(CCSPlayerController player, float chancePercent, float durationSeconds = 0f)
+    {
+        if (!player.IsValid) return;
+        float clamped = Math.Clamp(chancePercent, 0f, 100f);
+        var state = GetOrCreate(player.Slot);
+
+        if (durationSeconds <= 0f)
+        {
+            state.PassiveInfiniteAmmoChance = clamped <= 0f
+                ? 0f
+                : MathF.Max(state.PassiveInfiniteAmmoChance, clamped);
+            return;
+        }
+
+        CancelPlayerTimers(player, "infinite_ammo_temp");
+        state.TimedInfiniteAmmoChance = clamped;
+        int slot = player.Slot;
+        SchedulePlayerTimer(player, durationSeconds, () =>
+        {
+            if (_states.TryGetValue(slot, out var st))
+                st.TimedInfiniteAmmoChance = 0f;
+        }, repeat: false, tag: "infinite_ammo_temp");
+    }
+
+    public float GetInfiniteAmmoChance(int slot)
+    {
+        if (!_states.TryGetValue(slot, out var st)) return 0f;
+        return MathF.Max(st.PassiveInfiniteAmmoChance, st.TimedInfiniteAmmoChance);
+    }
+
+    public int GetRoundProcCount(int slot, string key)
+    {
+        if (string.IsNullOrEmpty(key)) return 0;
+        if (_states.TryGetValue(slot, out var st) && st.RoundProcCounts.TryGetValue(key, out int count))
+            return count;
+        return 0;
+    }
+
+    public int IncrementRoundProcCount(int slot, string key)
+    {
+        if (string.IsNullOrEmpty(key)) return 0;
+        var st = GetOrCreate(slot);
+        int next = st.RoundProcCounts.TryGetValue(key, out int cur) ? cur + 1 : 1;
+        st.RoundProcCounts[key] = next;
+        return next;
+    }
+
+    public void ClearAllRoundProcCounts()
+    {
+        foreach (var st in _states.Values)
+            st.RoundProcCounts.Clear();
     }
 
     public void SetPropDisguise(CCSPlayerController player, string modelPath)

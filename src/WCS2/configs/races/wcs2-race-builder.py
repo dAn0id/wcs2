@@ -91,10 +91,12 @@ TARGETS: list[tuple[str, str]] = [
     ("attacker", "The enemy who hit you (use on PlayerVictim reflect skills)"),
     ("enemy", "Whichever combat participant is NOT the skill owner"),
     ("nearby_enemies", "All alive enemies within radius (for aoe_damage / aoe_freeze)"),
+    ("nearby_teammates", "All alive teammates within radius excluding self (for instant_restock)"),
+    ("all_teammates", "All alive teammates excluding self (for instant_restock)"),
     ("all", "All connected human players (for global `sound` primitive)"),
 ]
 
-VALID_TARGET_KEYS: set[str] = {k for k, _ in TARGETS} | {"owner"}
+VALID_TARGET_KEYS: set[str] = {k for k, _ in TARGETS} | {"owner", "nearby_allies", "all_allies"}
 
 STANDARD_CATEGORIES: list[str] = [
     "Standard races",
@@ -305,8 +307,36 @@ PRIMITIVES_LIST: list[PrimitiveSpec] = [
             FieldSpec("message", "str", "", "", "Chat message ({value})"),
         ),
     ),
+    PrimitiveSpec(
+        key="player_scale",
+        category="Health, Defense & Buffs",
+        summary="Scales player model size (0.4-2.0x; resets to 1.0x on death/end)",
+        default_target="self",
+        recommended_triggers=("PlayerSpawn", "PlayerUltimate", "PlayerAbility"),
+        level_specs=(
+            FieldSpec("scale", "float", 0.8, "x", "Model scale (0.4-2.0)", suggested_start=0.9, suggested_end=0.6),
+            FieldSpec("duration", "float", 0.0, "s", "0 = until death/round end, >0 = timed"),
+        ),
+        param_specs=(
+            FieldSpec("message", "str", "", "", "Chat message ({value}, {pct}, {duration})"),
+        ),
+    ),
+    PrimitiveSpec(
+        key="infinite_ammo",
+        category="Health, Defense & Buffs",
+        summary="Chance on each weapon shot to refund the bullet into Clip1",
+        default_target="self",
+        recommended_triggers=("PlayerSpawn", "PlayerUltimate", "PlayerAbility"),
+        level_specs=(
+            FieldSpec("chance", "float", 50.0, "%", "Bullet refund chance 0-100%", suggested_start=20, suggested_end=80),
+            FieldSpec("duration", "float", 0.0, "s", "0 = until death/round end, >0 = timed"),
+        ),
+        param_specs=(
+            FieldSpec("message", "str", "", "", "Chat message ({chance}, {duration})"),
+        ),
+    ),
 
-    # --- Combat, Damage & Economy (8) ---
+    # --- Combat, Damage & Economy (10) ---
     PrimitiveSpec(
         key="bonus_damage",
         category="Combat, Damage & Economy",
@@ -445,8 +475,42 @@ PRIMITIVES_LIST: list[PrimitiveSpec] = [
         ),
         param_specs=(),
     ),
+    PrimitiveSpec(
+        key="cheat_death",
+        category="Combat, Damage & Economy",
+        summary="Prevents a lethal hit, leaving owner at survive_hp + brief invuln",
+        default_target="self",
+        recommended_triggers=("PlayerVictim",),
+        level_specs=(
+            FieldSpec("survive_hp", "int", 1, "HP", "HP left after cheating death", suggested_start=1, suggested_end=25),
+            FieldSpec("chance", "float", 100.0, "%", "Optional action-level chance 0-100%"),
+            FieldSpec("invuln_duration", "float", 0.35, "s", "Brief godmode to survive multi-hits"),
+        ),
+        param_specs=(
+            FieldSpec("max_per_round", "int", 1, "cnt", "Max procs per round (0 = unlimited)"),
+            FieldSpec("message", "str", "Cheat Death saved you with {value} HP!", "", "Center text ({value})"),
+        ),
+    ),
+    PrimitiveSpec(
+        key="splash_damage",
+        category="Combat, Damage & Economy",
+        summary="Deals % of hit damage to nearby enemies around victim (excludes victim)",
+        default_target="victim",
+        recommended_triggers=("PlayerAttacker",),
+        level_specs=(
+            FieldSpec("percent", "float", 35.0, "%", "Percent of hit damage splashed", suggested_start=15, suggested_end=50),
+            FieldSpec("radius", "float", 200.0, "u", "Splash radius around victim", suggested_start=150, suggested_end=260),
+        ),
+        param_specs=(
+            FieldSpec("min_damage", "float", 1.0, "dmg", "Minimum splash damage floor"),
+            FieldSpec("max_damage", "float", 0.0, "dmg", "Max splash damage cap (0 = uncapped)"),
+            FieldSpec("falloff", "bool", False, "", "Linear distance falloff across radius"),
+            FieldSpec("weapon_hint", "str", "", "", "Killfeed weapon hint"),
+            FieldSpec("ring_color", "color", [255, 140, 40], "RGB", "Optional impact ring RGB"),
+        ),
+    ),
 
-    # --- Control, Teleport & Respawn (8) ---
+    # --- Control, Teleport & Respawn (9) ---
     PrimitiveSpec(
         key="freeze",
         category="Control, Teleport & Respawn",
@@ -583,6 +647,20 @@ PRIMITIVES_LIST: list[PrimitiveSpec] = [
             FieldSpec("ring_color", "color", [255, 71, 36], "RGB", "Respawn marker ring RGB"),
         ),
     ),
+    PrimitiveSpec(
+        key="revive_teammate",
+        category="Control, Teleport & Respawn",
+        summary="Revives 1+ random dead teammates (refunds CD if none dead)",
+        default_target="self",
+        recommended_triggers=("PlayerUltimate", "PlayerAbility", "PlayerKill", "PlayerSpawn", "PlayerDeath"),
+        level_specs=(
+            FieldSpec("count", "int", 1, "cnt", "Number of dead teammates revived", suggested_start=1, suggested_end=2),
+            FieldSpec("health", "int", 0, "HP", "Optional spawn HP (0 = default 100)"),
+        ),
+        param_specs=(
+            FieldSpec("at_caster", "bool", False, "", "True = revive at caster, False = team spawn"),
+        ),
+    ),
 
     # --- Weapons & Effects (7) ---
     PrimitiveSpec(
@@ -625,6 +703,25 @@ PRIMITIVES_LIST: list[PrimitiveSpec] = [
         ),
         param_specs=(
             FieldSpec("weapon", "str", "secondary", "", "Weapon classname or primary/secondary"),
+        ),
+    ),
+    PrimitiveSpec(
+        key="instant_restock",
+        category="Weapons & Effects",
+        summary="Restocks/grants a weapon on an interval or one-shot (self or teammates)",
+        default_target="self",
+        recommended_triggers=("PlayerSpawn", "PlayerUltimate", "PlayerAbility"),
+        level_specs=(
+            FieldSpec("interval", "float", 10.0, "s", "Restock interval in seconds (<=0 = single one-shot grant)", suggested_start=12.0, suggested_end=4.0),
+            FieldSpec("duration", "float", 0.0, "s", "0 = until death/round end, >0 = stop after duration"),
+            FieldSpec("max_grants", "int", 0, "cnt", "Max grants (0 = unlimited)"),
+            FieldSpec("radius", "float", 300.0, "u", "Radius when target is nearby_teammates"),
+        ),
+        param_specs=(
+            FieldSpec("weapon", "str", "weapon_hegrenade", "", "CS2 weapon classname (normalized automatically)"),
+            FieldSpec("only_if_missing", "bool", True, "", "Only give if target doesn't already carry the weapon"),
+            FieldSpec("immediate", "bool", True, "", "Grant immediately on trigger in addition to interval ticks"),
+            FieldSpec("message", "str", "", "", "Optional chat message ({value} = weapon)"),
         ),
     ),
     PrimitiveSpec(
@@ -1864,7 +1961,7 @@ class RaceBuilderApp:
                     "browse",
                     "Browse Skill Primitives & Handlers",
                     f"[{len(PRIMITIVES)} + {len(CUSTOM_HANDLERS)}]",
-                    "Inspect all 34 built-in primitives and 6 reusable custom handlers.",
+                    f"Inspect all {len(PRIMITIVES)} built-in primitives and {len(CUSTOM_HANDLERS)} reusable custom handlers.",
                 ),
                 MenuItem("quit", "Quit", "", "Exit WCS2 Race Builder."),
             ]
@@ -3064,9 +3161,12 @@ def cmd_validate(paths: list[str]) -> int:
 
 def cmd_self_test() -> int:
     # 1. Exact catalog counts matching WCS2 SkillExecutionEngine.cs
-    assert len(PRIMITIVES) == 34, f"Expected 34 primitives, got {len(PRIMITIVES)}"
+    assert len(PRIMITIVES) == 40, f"Expected 40 primitives, got {len(PRIMITIVES)}"
     assert len(CUSTOM_HANDLERS) == 6, f"Expected 6 custom handlers, got {len(CUSTOM_HANDLERS)}"
     assert "teleport" in PRIMITIVES and "teleport_dash" in PRIMITIVES
+    for k in ("cheat_death", "splash_damage", "revive_teammate", "player_scale", "infinite_ammo", "instant_restock"):
+        assert k in PRIMITIVES, f"Missing new primitive: {k}"
+    assert "nearby_teammates" in VALID_TARGET_KEYS and "all_teammates" in VALID_TARGET_KEYS
     assert len(RACE_TRIGGERS) == 9
 
     # 2. Slugify
@@ -3148,7 +3248,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         description="Semi-graphical (curses) TUI & CLI tool to create, edit, and validate WCS2 race JSON files.",
     )
     p.add_argument("--validate", nargs="+", metavar="FILE", help="Validate one or more race JSON/JSONC files and exit.")
-    p.add_argument("--list-skills", action="store_true", help="Print all 34 built-in skill primitives and 6 custom handlers.")
+    p.add_argument("--list-skills", action="store_true", help=f"Print all {len(PRIMITIVES)} built-in skill primitives and {len(CUSTOM_HANDLERS)} custom handlers.")
     p.add_argument("--self-test", action="store_true", help="Run internal schema, catalog, JSONC, and interpolation unit checks.")
     p.add_argument("--load", metavar="FILE", help="Open an existing race JSON/JSONC file directly in the TUI.")
     p.add_argument("-o", "--output", metavar="FILE", help="Default output path when saving from the TUI.")
