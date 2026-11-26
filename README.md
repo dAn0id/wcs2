@@ -164,6 +164,240 @@ bind c ability
 
 ---
 
+## Creating Custom Races
+
+`WCS2` is fully data-driven: server admins can create new races (or edit existing ones) purely in JSON without writing C# or recompiling.
+
+### 1. Where to Add Custom Races & Hot-Reload
+
+1. Create a new JSON file under `game/csgo/addons/counterstrikesharp/plugins/WCS2/configs/races/<race_key>.json` (for example `frost_assassin.json`).
+   - Your custom files in `configs/races/` are **never overwritten** when updating `WCS2`.
+   - Standard JSON plus **`//` line comments**, `/* ... */` block comments, and **trailing commas** are supported.
+2. Run **`wcs_reload`** in the server console (or via RCON / admin console) to load your new race live without restarting the server.
+   - Check the server log for `[WCS2] Loaded <N> races across <M> categories.` to confirm your file parsed cleanly.
+
+### 2. Copy-Paste Example Race
+
+Save as `plugins/WCS2/configs/races/frost_assassin.json`:
+
+```jsonc
+{
+  "key": "frost_assassin",
+  "name": "Frost Assassin",
+  "author": "ServerAdmin",
+  "description": "Fast, stealthy striker with frost slows and an electric dash.",
+  "required_level": 0,      // Total player level required to pick this race (0 = unlocked)
+  "max_level": 0,           // Max race level (0 = uncapped)
+  "team_limit": 0,          // Max players per team on this race (0 = unlimited)
+  "restrict_team": 0,       // 0 = both teams, 2 = T only, 3 = CT only
+  "categories": ["Custom races", "All races"],
+  "allowed_weapons": [],    // Optional allowlist, e.g. ["weapon_knife", "weapon_p250", "weapon_c4"]
+  "restricted_weapons": [], // Optional denylist when allowed_weapons is empty, e.g. ["weapon_awp"]
+
+  // Optional race-level lifecycle actions (also supports death_actions, round_start_actions, round_end_actions)
+  "spawn_actions": [
+    {
+      "type": "beam_ring",
+      "target": "self",
+      "params": { "radius": 70, "r": 120, "g": 220, "b": 255, "width": 5, "duration": 1.5, "z_offset": 15 }
+    }
+  ],
+
+  "skills": [
+    {
+      "key": "frost_cloak",
+      "name": "Frost Cloak",
+      "description": "Grants stealth and faster movement on spawn.",
+      "trigger": "PlayerSpawn",
+      "max_level": 5,
+      "required_level": 0,  // Race level required to invest points in this skill
+      "actions": [
+        {
+          "type": "invisibility",
+          "target": "self",
+          "delay": 0.5,
+          "level_values": { "alpha": [230, 205, 180, 155, 130] },
+          "params": { "message": "Frost Cloak - {pct}% invisible." }
+        },
+        {
+          "type": "speed",
+          "target": "self",
+          "level_values": { "value": [1.10, 1.15, 1.20, 1.25, 1.30] },
+          "params": { "mode": "set", "source": "frost_cloak" }
+        }
+      ]
+    },
+    {
+      "key": "chilling_blade",
+      "name": "Chilling Blade",
+      "description": "Chance on hit to slow your target and deal bonus damage.",
+      "trigger": "PlayerAttacker",
+      "max_level": 5,
+      "required_level": 0,
+      "chances": [10, 14, 18, 22, 26], // Proc chance % per skill level (empty = 100%)
+      "weapons": [],                   // Optional weapon filter, e.g. ["weapon_knife"] or ["weapon_hegrenade"]
+      "actions": [
+        {
+          "type": "speed",
+          "target": "victim",
+          "level_values": {
+            "value": [0.85, 0.80, 0.75, 0.70, 0.65],
+            "duration": [1.0, 1.3, 1.6, 1.9, 2.2]
+          },
+          "params": {
+            "mode": "set",
+            "source": "chilling_blade",
+            "prevent_stack_key": "is_slowed",
+            "message": "Slowed {victim} for {duration}s!",
+            "victim_message": "{attacker} slowed you for {duration}s!"
+          }
+        },
+        {
+          "type": "bonus_damage",
+          "target": "victim",
+          "level_values": { "min_damage": [4, 6, 8, 10, 12], "max_damage": [8, 10, 12, 15, 18] },
+          "params": { "center_message": "Chilling Blade +{damage} damage!" }
+        }
+      ]
+    },
+    {
+      "key": "frost_dash",
+      "name": "Frost Dash",
+      "description": "Launch yourself forward where you aim.",
+      "trigger": "PlayerUltimate",
+      "max_level": 5,
+      "required_level": 5,
+      "cooldowns": [8.0, 7.0, 6.0, 5.0, 4.0], // Cooldown in seconds per skill level
+      "actions": [
+        {
+          "type": "teleport_dash",
+          "target": "self",
+          "level_values": { "force": [800, 950, 1100, 1250, 1400] },
+          "params": {
+            "z_boost": 150,
+            "sound": "UIPanorama.equip_musicKit",
+            "sound_volume": 0.5,
+            "particle_count": 2
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 3. Triggers, Targets, Scaling & Placeholders
+
+- **How `level_values` vs `params` work:**
+  - `level_values`: Dictionary of numeric arrays indexed by skill level (index `0` = level 1, index `1` = level 2, ..., clamped to the last element if the array is shorter than `max_level`). Example: `"level_values": { "amount": [10, 20, 30] }`.
+  - `params`: Static constants (numbers, strings, booleans, `[r, g, b]` color arrays, or string arrays). Any numeric key accepted in `level_values` can also be set as a constant in `params`.
+  - `delay`: Optional delay in seconds before an action executes (automatically cancelled if the round ends or player disconnects).
+  - If a primary action fails to activate (e.g. teleport blocked, already frozen, insufficient cash, all enemies immune), trailing actions in the same skill are skipped and the ultimate/ability cooldown is refunded.
+- **Valid `trigger` values** (enum names in `SkillTrigger`, case-insensitive):
+
+| Trigger | Fires When |
+| --- | --- |
+| `PlayerSpawn` | Player spawns alive (race `spawn_actions` run first, then `PlayerSpawn` skills) |
+| `PlayerAttacker` | Player deals non-skill weapon/grenade damage to an enemy |
+| `PlayerVictim` | Player takes damage from an enemy (before damage resolves) |
+| `PlayerDeath` | Player dies |
+| `PlayerKill` | Player kills an enemy |
+| `PlayerUltimate` | Player activates `ultimate` / `css_ultimate` (or inspect bind) |
+| `PlayerAbility` | Player activates `ability` / `css_ability` |
+| `PlayerRoundStart` | Round starts (race `round_start_actions` / matching skills) |
+| `PlayerRoundEnd` | Round ends (race `round_end_actions` / matching skills) |
+| `PlayerBuy` | Shop item instant purchase (`items.json`) |
+
+- **Valid `target` selectors:**
+  - Single-target: `"self"` (or `"owner"`), `"victim"`, `"attacker"`, `"enemy"` (resolves to the opposite player in combat).
+  - AoE (`aoe_damage`, `aoe_freeze`): `"nearby_enemies"`.
+  - Audio (`sound`): `"self"`, `"victim"`, `"attacker"`, or `"all"` (every connected human player).
+- **Message placeholders** (usable in `message`, `center_message`, `attacker_message`, `victim_message`, `target_message`, `text`, etc.):
+  `{value}`, `{pct}`, `{amount}`, `{damage}`, `{heal}`, `{duration}`, `{chance}`, `{count}`, `{owner}`, `{attacker}`, `{victim}`.
+
+### 4. Available Skill Primitives (34 Built-In)
+
+<details>
+<summary><strong>Health, Defense &amp; Passive Buffs (11 primitives)</strong></summary>
+
+| `type` | Description | Key `level_values` / `params` |
+| --- | --- | --- |
+| `health` | Add or set HP (supports penalties via negative `amount`) | `amount`, `mode` (`"add"` \| `"set"`), `max_cap` (`0` = none), `min_hp` (`1`), `update_max_health` (`true`), `message` |
+| `regen` | Periodic self or team-aura health regeneration | `amount` or `min_heal` + `max_heal`, `interval` or `min_interval` + `max_interval`, `max_cap` (`0` = capture current HP on start), `radius` (`0` = self only, `>0` = self + allies), `tag` |
+| `evasion` | Passive (round) or timed dodge chance (`0–100%`) | `chance`, `duration` (`0` = full round), `warn_before_end`, `message`, `center_message`, `fading_message`, `ended_message` |
+| `damage_absorb` | Passive incoming damage reduction (`0.0–0.95`) + optional mirror damage | `absorb`, `mirror_min`, `mirror_max`, `message` |
+| `ultimate_immunity` | Grants immunity to enemy ultimates for the round | `message` |
+| `invisibility` | Sets render alpha (`0–255`) on player pawn, weapons & wearables | `alpha`, `r`, `g`, `b`, `duration` (`0` = full round), `message` |
+| `speed` | Sets or adds movement speed modifier (permanent or timed slow/sprint) | `value`, `mode` (`"set"` \| `"add"`), `duration` (`0` = full round), `source`, `prevent_stack_key` (e.g. `"is_slowed"`), `message`, `victim_message` |
+| `gravity` | Sets or reduces gravity scale (`0.1–2.0`, re-applied after ladders) | `value`, `mode` (`"set"` \| `"subtract"`, where subtract computes `1.0 - value`), `duration`, `source`, `message` |
+| `longjump` | Boosts horizontal jump velocity (`0.1–2.5` clamped for CS2 physics) | `multiplier`, `mode` (`"add"` \| `"set"`), `message` |
+| `set_ultimate_cooldown` | Sets an initial cooldown on the race's ultimate (typically in `spawn_actions`) | `seconds` |
+| `give_levels` | Grants instant race levels (fixed or weighted bonus roll) | `levels`, `bonus_chance` (`0–100`), `bonus_levels`, `message` |
+
+</details>
+
+<details>
+<summary><strong>Combat, Damage &amp; Economy (8 primitives)</strong></summary>
+
+| `type` | Description | Key `level_values` / `params` |
+| --- | --- | --- |
+| `bonus_damage` | Deals extra flat or random `[min, max]` damage on hit | `damage` or `min_damage` + `max_damage`, `ignore_armor` (`false`), `weapon_hint`, `center_message`, `victim_message` |
+| `reflect_damage` | Reflects damage back to the attacker on `PlayerVictim` | `damage` or `min_damage` + `max_damage`, `ignore_armor` (`false`), `center_message`, `attacker_message` |
+| `vampiric` | Heals attacker on hit up to a health cap | `amount` or `min_heal` + `max_heal`, `max_cap` (`260`), `center_message`, `cap_message` |
+| `aoe_damage` | Deals damage to nearby enemies (Chain Lightning, Fan of Knives, Suicide Bomb) | `radius`, `damage` or `min_damage` + `max_damage`, `max_targets` (`20`), `respect_immunity` (`true`), `refund_if_none`, `draw_beams`, `draw_rings`, `beam_color` (`[r,g,b]`), `ring_color`, `weapon_hint`, `sound`, `center_message`, `target_message` |
+| `burn_dot` | Periodic burn/poison damage-over-time ticks attributed to attacker | `duration`, `damage_per_tick`, `interval`, `prevent_stack_key` (e.g. `"is_burning"`), `color` (`[r,g,b]`), `attacker_message`, `victim_message` |
+| `steal_cash` | Steals cash from victim (clamped to victim's balance) and gives to attacker | `amount`, `attacker_message`, `victim_message` |
+| `cash_to_health` | Spends cash to heal self if HP is at/below threshold (refunds cooldown if invalid) | `amount`, `cost` (`100`), `max_hp_threshold` (`175`) |
+| `random_enemy_drain` | Strikes a random alive non-immune enemy for damage, healing caster + granting armor | `damage`, `heal`, `health_cap` (`225`), `armor`, `armor_cap` (`250`) |
+
+</details>
+
+<details>
+<summary><strong>Control, Teleport &amp; Respawn (8 primitives)</strong></summary>
+
+| `type` | Description | Key `level_values` / `params` |
+| --- | --- | --- |
+| `freeze` | Immobilizes (`MOVETYPE_NONE`) a single target for `duration` | `duration`, `prevent_stack` (`true`), `center_message`, `victim_message` |
+| `aoe_freeze` | Freezes all alive non-immune enemies within `radius` (refunds cooldown if none hit) | `radius`, `duration`, `max_targets` (`20`), `respect_immunity` (`true`), `beam_color`, `ring_color`, `sound` |
+| `push` | Applies velocity impulse to target (e.g. upward launch) | `vx`, `vy`, `vz` (`520`), `additive` (`true`) |
+| `shake` | Sends a CS2 `Shake` screen shake to target | `amplitude` (`15`), `frequency` (`13`), `duration` (`3.0`), `attacker_message`, `victim_message` |
+| `fade` | Sends a CS2 `Fade` screen tint + optional shake (disorient/banish effect) | `r`, `g`, `b`, `a` (or `color: [r,g,b,a]`), `duration`, `hold_ratio` (`0.7`), `shake_amplitude`, `shake_frequency`, `attacker_message`, `victim_message` |
+| `teleport` | Safe hull-traced crosshair teleport (or velocity push mode); refunds cooldown if blocked | `range` (`1200`), `mode` (`"safe"` \| `"push"`), `push_factor` (`1.8`), `sound` |
+| `teleport_dash` | Dash-style velocity launch along aim angles with sound + electric/distort particles | `force` (`200–2500`, default `1000`), `z_boost` (`150`), `sound` (`"UIPanorama.equip_musicKit"`), `sound_volume` (`0.5`), `particle_count` (`2`), `glow_particle`, `glow_duration` (`3.0`), `distort_particle`, `distort_duration` (`2.0`) |
+| `respawn` | Delayed self-respawn on `PlayerDeath` with countdown (guarded against round end) | `delay` (`3.0`), `at_death_origin` (`true`), `restore_weapons` (`false`), `countdown` (`true`), `ring_color` |
+
+</details>
+
+<details>
+<summary><strong>Weapons &amp; Visual/Audio Effects (7 primitives)</strong></summary>
+
+| `type` | Description | Key `level_values` / `params` |
+| --- | --- | --- |
+| `give_weapon` | Gives one or more CS2 weapons (with optional primary/secondary strip first) | `weapon` or `weapons` (`string[]`), `strip_primary` (`false`), `strip_secondary` (`false`), `message` |
+| `drop_weapon` | Forces target to drop their primary (or active) weapon | `primary_only` (`true`), `attacker_message`, `victim_message` |
+| `set_clip_ammo` | Overrides active/matching weapon magazine clip and/or reserve ammo | `weapon` (e.g. `"weapon_p250"` or `"secondary"`), `clip`, `reserve` |
+| `beam` | Draws a colored `CBeam` line between two players | `from` (`"attacker"`), `to` (`"victim"`), `r`, `g`, `b` (or `color`), `width`, `duration`, `z_offset` |
+| `beam_ring` | Draws one or more stacked `CBeam` rings around a player | `radius`, `r`, `g`, `b` (or `color`), `width`, `duration`, `z_offset`, `count` (`1–6`), `z_step` |
+| `sound` | Plays a CS2 sound event for a player or all players (`target: "all"`) | `sound_event` |
+| `message` | Prints a formatted chat or center-screen message | `text`, `center` (`false`) |
+
+</details>
+
+### 5. Reusable Custom Handlers (6 Built-In)
+
+For bespoke multi-state mechanics that go beyond single primitives, set `"custom_handler": "<key>"` on a skill (or race). When `custom_handler` is set on a skill, the handler executes **instead of** the skill's `actions[]` array (and reads any optional tuning values from `actions[0]`'s `level_values` / `params`):
+
+| `custom_handler` Key | Attach To | Behavior & Optional `actions[0]` Tuning |
+| --- | --- | --- |
+| `archmage_lift_off` | `PlayerUltimate` skill | Human-only toggleable jetpack flight: toggle ON enables jetpack + grants `bonus_hp` and refunds cooldown; toggle OFF disables jetpack, subtracts `bonus_hp` (min 1 HP), and applies cooldown. Optional `level_values.bonus_hp` (default `[5, 9, 12, 15, 18, 20]`). |
+| `blood_mage_phoenix` | `PlayerSpawn` skill | Once per round rolls `skill.chances` (default `[15, 30, 45, 60, 75, 90]`) to add a revival charge to the team's Phoenix pool; automatically resurrects the first dying teammate after 3s (or self-revives at death origin in FFA). |
+| `shadow_hunter_ward` | Race + `PlayerAbility` skill | Grants `charges` (default `3`) Serpent Wards per round. Placing a ward pulses `damage` every 1s to enemies within `radius`, slows them by `-30%` while inside, and draws team-colored pillar + ground ring visuals. Optional `level_values.{duration, damage, radius}` & `params.charges`. |
+| `warden_restoration` | `PlayerUltimate` skill | Missing-HP scaling self-heal (16 HP brackets; heals more the lower your HP, capped at 100 HP when cast below 10 HP). Refuses & refunds cooldown if current HP `>= 175`. |
+| `succubus_skulls` | Race + skills (`head_hunter`, `incantation`, `transformation`) | Persistent 0–5 skull stack across rounds (33% chance to lose 1 on death). Attacker skill deals `9–15` bonus dmg & gains a skull; spawn skill grants `+$150` cash & `+10` HP per skull; ultimate spends 1 skull for low gravity (`gravity`, default `0.50`), `+25` HP (`bonus_hp`, `health_cap: 200`), and `+0.25` speed (`bonus_speed`, `speed_cap: 2.0`). |
+| `defiladed_destructor` | Race + `PlayerUltimate` skill | On spawn: disguises player as the configured barrel prop (`default_barrel_model` in `wcs.json`), restricts weapons to P250/knife/C4, grants a 250-clip / 0-reserve P250, and applies `-60` HP. On ultimate: spawns physics oil barrels in front of aim (stopping safely at walls/props, cleaned up on round end). Optional `params`: `max_props` (`10`), `model`, `explosive` (`true`), `explosion_damage` (`90`), `explosion_radius` (`220`), `lifetime` (`60`). |
+
+---
+
 ## Build
 
 For developers compiling `WCS2` from source.
