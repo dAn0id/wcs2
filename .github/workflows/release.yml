@@ -61,16 +61,18 @@ jobs:
           test -f stage/WCS2/libe_sqlite3.so
           test -f stage/WCS2/Microsoft.Data.Sqlite.dll
           test -f stage/WCS2/Dapper.dll
-          test -f stage/WCS2/configs/wcs.json
-          test -f stage/WCS2/configs/gamedata.json
-          test -f stage/WCS2/configs/items.json
-          RACE_COUNT=$(find stage/WCS2/configs/races -maxdepth 1 -name '*.json' | wc -l)
-          echo "Bundled race JSON files: ${RACE_COUNT}"
+          test -f stage/WCS2/defaults/configs/wcs.json
+          test -f stage/WCS2/defaults/configs/gamedata.json
+          test -f stage/WCS2/defaults/configs/items.json
+          RACE_COUNT=$(find stage/WCS2/defaults/configs/races -maxdepth 1 -name '*.json' | wc -l)
+          echo "Bundled default race JSON files: ${RACE_COUNT}"
           test "${RACE_COUNT}" -ge 12
+          # Ensure no top-level configs/ directory is shipped so updates never overwrite admin configs
+          test ! -e stage/WCS2/configs
           # Ensure runtime-provided CSS / shared DLLs are NOT duplicated inside plugin folder
           test ! -f stage/WCS2/CounterStrikeSharp.API.dll
           test ! -f stage/WCS2/CS2MenuManager.dll
-          ls -la stage/WCS2 stage/WCS2/configs
+          ls -la stage/WCS2 stage/WCS2/defaults/configs
 
       - name: Package release archives
         shell: bash
@@ -103,11 +105,12 @@ jobs:
 
           Prebuilt CounterStrikeSharp plugin bundle for **Counter-Strike 2 Linux x86_64 dedicated servers** (CounterStrikeSharp \`v1.0.381+\` with \`.NET 10.0\` runtime + \`CS2MenuManager v1.0.43+\`).
 
-          ### Quick Install
+          ### Quick Install / Safe Update
           1. Ensure **Metamod:Source 2.0**, **CounterStrikeSharp \`v1.0.381+\`** (\`with-runtime\`), and **\`CS2MenuManager\`** (\`shared/CS2MenuManager/\`) are installed.
           2. Extract \`WCS2-${RELEASE_TAG}-linux-x64.zip\` (or \`.tar.gz\`) directly into:
              \`game/csgo/addons/counterstrikesharp/plugins/\`
-             so that \`plugins/WCS2/WCS2.dll\`, \`libe_sqlite3.so\`, and \`configs/\` are created cleanly.
+             so that \`plugins/WCS2/WCS2.dll\`, \`libe_sqlite3.so\`, and \`defaults/configs/\` are extracted cleanly.
+             Missing default configs are seeded automatically into \`plugins/WCS2/configs/\` on startup — **existing customized files in \`configs/\` and \`data/\` are never overwritten**!
           3. Configure admins in \`addons/counterstrikesharp/configs/admins.json\` (or \`plugins/WCS2/configs/wcs.json\` -> \`admin_steam_ids\`).
           4. Restart your CS2 server and verify \`css_plugins list\`.
 

@@ -29,6 +29,47 @@ public sealed class RaceRegistry
     public IReadOnlyList<ItemDefinition> Items => _orderedItems;
     public IReadOnlyDictionary<string, List<RaceDefinition>> Categories => _categories;
 
+    /// <summary>
+    /// Copies missing default config files from defaults/configs/ into configs/ without
+    /// ever overwriting existing admin-customized files.
+    /// </summary>
+    public void EnsureConfigsSeeded(string moduleDirectory)
+    {
+        string defaultsDir = Path.Combine(moduleDirectory, "defaults", "configs");
+        if (!Directory.Exists(defaultsDir))
+            return;
+
+        string targetDir = Path.Combine(moduleDirectory, "configs");
+        int seeded = 0;
+
+        try
+        {
+            foreach (string srcPath in Directory.EnumerateFiles(defaultsDir, "*", SearchOption.AllDirectories))
+            {
+                string relPath = Path.GetRelativePath(defaultsDir, srcPath);
+                string destPath = Path.Combine(targetDir, relPath);
+                if (File.Exists(destPath))
+                    continue;
+
+                string? destParent = Path.GetDirectoryName(destPath);
+                if (!string.IsNullOrEmpty(destParent))
+                    Directory.CreateDirectory(destParent);
+
+                File.Copy(srcPath, destPath, overwrite: false);
+                seeded++;
+            }
+
+            if (seeded > 0)
+            {
+                _logger.LogInformation("[WCS2] Seeded {Count} missing default config file(s) into configs/.", seeded);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[WCS2] Error seeding default config files from {DefaultsDir}.", defaultsDir);
+        }
+    }
+
     public WcsConfig LoadConfig(string configDir)
     {
         var path = Path.Combine(configDir, "wcs.json");

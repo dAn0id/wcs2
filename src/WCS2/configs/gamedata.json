@@ -1,4 +1,10 @@
 {
+  // Symbol resolution mode for Source2TraceEngine (Linux x64 libserver.so):
+  //   "auto"     (default) - Dynamically resolves symbols via ELF64 (RTTI, VProf string xref,
+  //                          caller consensus), falling back per-symbol to linux_signatures if needed.
+  //   "dynamic"            - Uses dynamic ELF64 auto-resolution only (disables linux_signatures fallback).
+  //   "gamedata"           - Uses linux_signatures from this file only (manual override without
+  //                          recompiling; apply edits live with `wcs_reload`).
   "resolution_mode": "auto",
   "dynamic": {
     "trace_shape_vprof_string": "Physics/TraceShape (Server)",

@@ -56,6 +56,7 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
     {
         string configDir = Path.Combine(ModuleDirectory, "configs");
         _registry = new RaceRegistry(Logger);
+        _registry.EnsureConfigsSeeded(ModuleDirectory);
         _config = _registry.LoadConfig(configDir);
         _registry.LoadAll(configDir);
 
@@ -736,6 +737,7 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
         {
             if (p != null && !_menus.IsWcsAdmin(p)) return;
             string configDir = Path.Combine(ModuleDirectory, "configs");
+            _registry.EnsureConfigsSeeded(ModuleDirectory);
             _config = _registry.LoadConfig(configDir);
             _registry.LoadAll(configDir);
             var gamedata = GamedataConfig.Load(configDir, Logger);

@@ -26,7 +26,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="configs\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="configs" Condition="Exists('configs')" />
+    <None Remove="configs\**\*" />
+    <None Include="configs\**\*" CopyToOutputDirectory="PreserveNewest" Link="defaults\configs\%(RecursiveDir)%(Filename)%(Extension)" Condition="Exists('configs')" />
   </ItemGroup>
 
 </Project>

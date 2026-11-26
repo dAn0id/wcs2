@@ -52,7 +52,14 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
            ├── SQLitePCLRaw.core.dll
            ├── SQLitePCLRaw.provider.e_sqlite3.dll
            ├── libe_sqlite3.so
-           ├── configs/
+           ├── defaults/
+           │   └── configs/               # Shipped defaults (never overwrites configs/ on update)
+           │       ├── wcs.json
+           │       ├── gamedata.json
+           │       ├── items.json
+           │       └── races/
+           │           └── *.json
+           ├── configs/                   # Auto-seeded from defaults/configs/ on first boot
            │   ├── wcs.json
            │   ├── gamedata.json
            │   ├── items.json
@@ -73,6 +80,8 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
                └── wcs2.sqlite            # Fresh WAL-mode SQLite DB
    ```
 3. Ensure all files are owned by the Linux user running your CS2 server (e.g. `chown -R <server-user>:<server-user> plugins/WCS2`).
+
+> **Safe Updating:** Release archives ship default config templates under `defaults/configs/` and never include a `configs/` folder. On startup (and `wcs_reload`), `WCS2` copies only *missing* files from `defaults/configs/` into `configs/` — so extracting a new release archive directly over `plugins/WCS2/` safely preserves all customized `wcs.json`, `gamedata.json`, `items.json`, `races/*.json`, and `data/wcs2.sqlite` files.
 
 ### 3. Configure Admins
 
@@ -173,7 +182,7 @@ dotnet build -c Release src/WCS2.sln
 dotnet publish src/WCS2/WCS2.csproj -c Release -r linux-x64 --no-self-contained -o publish/WCS2
 ```
 
-Publishing with `-r linux-x64 --no-self-contained` is required so `Microsoft.Data.Sqlite` bundles the Linux x64 native `libe_sqlite3.so` binary alongside `WCS2.dll`, `Dapper.dll`, `SQLitePCLRaw.*.dll`, and the default `configs/` directory (while keeping `CounterStrikeSharp.API` and `CS2MenuManager` runtime-excluded so they resolve from CounterStrikeSharp's `api/` and `shared/` folders).
+Publishing with `-r linux-x64 --no-self-contained` is required so `Microsoft.Data.Sqlite` bundles the Linux x64 native `libe_sqlite3.so` binary alongside `WCS2.dll`, `Dapper.dll`, `SQLitePCLRaw.*.dll`, and the default config templates under `defaults/configs/` (while keeping `CounterStrikeSharp.API` and `CS2MenuManager` runtime-excluded so they resolve from CounterStrikeSharp's `api/` and `shared/` folders).
 
 ### Project Structure
 
