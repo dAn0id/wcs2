@@ -32,7 +32,7 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
 
 ### 2. Download & Extract Prebuilt Release
 
-1. Download the latest `WCS2-v1.0.6-linux-x64.zip` (or `.tar.gz`) archive from **[GitHub Releases](https://github.com/dAn0id/wcs2/releases)**.
+1. Download the latest `WCS2-v1.0.7-linux-x64.zip` (or `.tar.gz`) archive from **[GitHub Releases](https://github.com/dAn0id/wcs2/releases)**.
 2. Extract it into `game/csgo/addons/counterstrikesharp/plugins/` so the directory layout looks like:
    ```text
    game/csgo/addons/counterstrikesharp/
@@ -128,7 +128,7 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
 
 Restart your CS2 server and verify in the server console / RCON:
 - `meta list` -> `CounterStrikeSharp` loaded
-- `css_plugins list` -> `[#1:LOADED]: "WCS2" (1.0.6)`
+- `css_plugins list` -> `[#1:LOADED]: "WCS2" (1.0.7)`
 - Server startup logs confirm:
   - `[WCS2] Loaded 11 races across 3 categories.`
   - `[WCS2] Loaded 4 shop items.`
@@ -165,6 +165,7 @@ bind c ability
 - `wcs_reload` — Reload `wcs.json`, `gamedata.json`, `items.json`, and all `races/*.json` configs (admin / server console).
 - `wcs_update_check` — Trigger an immediate async GitHub release check (`@css/root` / `admin_steam_ids` / server console).
 - `wcs_tracetest` — Run a live Source 2 Line + Player-BBox Hull trace self-test (admin / server console).
+- `wcs2_version` — Print the currently running `WCS2` version (server console / RCON / client console).
 
 ---
 

@@ -19,7 +19,7 @@ namespace WCS2;
 public sealed class WcsPlugin : BasePlugin, ISkillServices
 {
     public override string ModuleName => "WCS2";
-    public override string ModuleVersion => "1.0.6";
+    public override string ModuleVersion => "1.0.7";
     public override string ModuleAuthor => "dAn!EL";
     public override string ModuleDescription => "Warcraft:Source (WCS) RPG mod for CS2 CounterStrikeSharp";
 
@@ -834,6 +834,22 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
             Logger.LogInformation("{Msg}", msg);
             if (p != null) _effects.PrintChat(p, msg);
             else Server.PrintToConsole(msg);
+        });
+
+        // Version query command (server console, RCON, or player console)
+        AddCommand("wcs2_version", "Print the currently running WCS2 version", (p, info) =>
+        {
+            string msg = $"[WCS2] Version {ModuleVersion}";
+            if (p != null)
+            {
+                _effects.PrintChat(p, $"Version {ModuleVersion}");
+                info.ReplyToCommand(msg);
+            }
+            else
+            {
+                Logger.LogInformation("{Msg}", msg);
+                Server.PrintToConsole(msg);
+            }
         });
     }
 
