@@ -510,29 +510,38 @@ public sealed class UpdateService : IDisposable
             }
 
             // Atomically replace files in ModuleDirectory via POSIX rename() (never truncates live WCS2.dll!)
+            // All non-WCS2.dll files are installed first, then WCS2.pdb, then WCS2.dll LAST.
             int installedCount = ApplyExtractedFilesAtomically(extractDir, _plugin.ModuleDirectory);
             _logger.LogInformation("[WCS2] Atomically installed {Count} file(s) for v{Version}.",
                 installedCount, check.LatestVersion);
 
             CleanupDirectory(tmpDir);
 
+            // Trigger CounterStrikeSharp's native FileSystemWatcher (PluginLoader.Reloaded) via LastWrite/IN_ATTRIB
+            // so CSSharp creates a fresh ManagedLoadContext (css_plugins reload reuses the old ManagedLoadContext
+            // and fails with FileLoadException on assembly version upgrades).
+            string wcs2DllPath = Path.Combine(_plugin.ModuleDirectory, "WCS2.dll");
+            if (File.Exists(wcs2DllPath))
+            {
+                File.SetLastWriteTimeUtc(wcs2DllPath, DateTime.UtcNow);
+            }
+
             string installedVersion = check.LatestVersion;
             MarshalToMainThread(() =>
             {
+                string doneMsg = $"Installed v{installedVersion}! Triggering CounterStrikeSharp hot-reload (restart server if PluginHotReloadEnabled is disabled in core.json).";
                 if (requesterSlot.HasValue)
                 {
                     var p = Utilities.GetPlayerFromSlot(requesterSlot.Value);
                     if (p != null && p.IsValid && !p.IsBot && p.SteamID == requesterSteamId)
                     {
-                        p.PrintToChat($" {ChatColors.Green}[WCS2]{ChatColors.Default} Installed v{installedVersion}! Reloading plugin...");
+                        p.PrintToChat($" {ChatColors.Green}[WCS2]{ChatColors.Default} {doneMsg}");
                     }
                 }
                 else
                 {
-                    Server.PrintToConsole($"[WCS2] Installed v{installedVersion}! Reloading plugin...");
+                    Server.PrintToConsole($"[WCS2] {doneMsg}");
                 }
-
-                Server.ExecuteCommand("css_plugins reload WCS2");
             });
         }
         catch (OperationCanceledException)
@@ -713,9 +722,15 @@ public sealed class UpdateService : IDisposable
             fullModuleRoot += Path.DirectorySeparatorChar;
 
         int count = 0;
-        foreach (string srcFile in Directory.EnumerateFiles(extractDir, "*", SearchOption.AllDirectories))
+        var orderedFiles = Directory.EnumerateFiles(extractDir, "*", SearchOption.AllDirectories)
+            .Select(srcFile => (SrcFile: srcFile, RelPath: Path.GetRelativePath(extractDir, srcFile).Replace('\\', '/')))
+            .OrderBy(item =>
+                item.RelPath.Equals("WCS2.dll", StringComparison.OrdinalIgnoreCase) ? 2 :
+                item.RelPath.Equals("WCS2.pdb", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+            .ThenBy(item => item.RelPath, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (srcFile, relPath) in orderedFiles)
         {
-            string relPath = Path.GetRelativePath(extractDir, srcFile).Replace('\\', '/');
             if (IsProtectedOrExcludedRelativePath(relPath))
                 continue;
 

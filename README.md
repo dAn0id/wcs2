@@ -32,7 +32,7 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
 
 ### 2. Download & Extract Prebuilt Release
 
-1. Download the latest `WCS2-v1.0.4-linux-x64.zip` (or `.tar.gz`) archive from **[GitHub Releases](https://github.com/dAn0id/wcs2/releases)**.
+1. Download the latest `WCS2-v1.0.5-linux-x64.zip` (or `.tar.gz`) archive from **[GitHub Releases](https://github.com/dAn0id/wcs2/releases)**.
 2. Extract it into `game/csgo/addons/counterstrikesharp/plugins/` so the directory layout looks like:
    ```text
    game/csgo/addons/counterstrikesharp/
@@ -122,13 +122,13 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
 - **Hot-Reload, Diagnostics & In-Game Updater:**
   - `wcs_reload` — Reloads `wcs.json`, `gamedata.json`, `items.json`, and all `races/*.json` live without restarting the server.
   - `wcs_tracetest` — Runs a live Source 2 Line + Player-BBox Hull diagnostic trace on the current map and logs symbol resolution sources and hit results.
-  - `wcs_update_check` — Forces an async GitHub release check (`@css/root` / `admin_steam_ids` / server console). Root Admins also receive a once-per-map red chat alert on team join when a newer release exists and can download, SHA256-verify, atomically install (preserving `configs/` and `data/`), and live-reload directly from **`!wcsadmin` -> `WCS2 Updates`**.
+  - `wcs_update_check` — Forces an async GitHub release check (`@css/root` / `admin_steam_ids` / server console). Root Admins also receive a once-per-map red chat alert on team join when a newer release exists and can download, SHA256-verify, atomically install (preserving `configs/` and `data/`), and trigger CounterStrikeSharp's native `FileSystemWatcher` hot-reload (requires `PluginHotReloadEnabled: true` in `core.json`, or a server restart if disabled) directly from **`!wcsadmin` -> `WCS2 Updates`**.
 
 ### 5. Start & Verify
 
 Restart your CS2 server and verify in the server console / RCON:
 - `meta list` -> `CounterStrikeSharp` loaded
-- `css_plugins list` -> `[#1:LOADED]: "WCS2" (1.0.4)`
+- `css_plugins list` -> `[#1:LOADED]: "WCS2" (1.0.5)`
 - Server startup logs confirm:
   - `[WCS2] Loaded 11 races across 3 categories.`
   - `[WCS2] Loaded 4 shop items.`

@@ -4,6 +4,11 @@ All notable changes to **WCS2** are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2026-11-26 — In-Game Updater Hot-Reload Fix
+
+### Fixed
+- **In-Game Updater Live Hot-Reload (`UpdateService`):** Removed `css_plugins reload WCS2` (which reuses CounterStrikeSharp's existing `ManagedLoadContext` and threw `FileLoadException: Assembly with same name is already loaded` across assembly version upgrades). The updater now atomically installs all dependencies/defaults first, moves `WCS2.pdb` then `WCS2.dll` last, and touches `WCS2.dll`'s `LastWriteTimeUtc` to trigger CounterStrikeSharp's native `FileSystemWatcher` (`PluginLoader.Reloaded`) hot-reload with a fresh `ManagedLoadContext` (requires `PluginHotReloadEnabled: true` in `core.json`, or a server restart if disabled).
+
 ## [1.0.4] - 2026-11-26 — New Skill Primitives & In-Game Updater
 
 ### Added
@@ -55,6 +60,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Dash-Style Teleport Alternative:** Added the `teleport_dash` primitive (velocity launch + sound + electric/distort particles) and included a commented-out alternative in `human_alliance.json` using JSONC comment support.
 - **Automated Linux x64 Releases:** Added `.github/workflows/release.yml` to build, verify, and publish `.zip`, `.tar.gz`, and `SHA256SUMS.txt` artifacts on `v*` tags.
 
+[1.0.5]: https://github.com/dAn0id/wcs2/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/dAn0id/wcs2/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/dAn0id/wcs2/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/dAn0id/wcs2/compare/v1.0.1...v1.0.2
