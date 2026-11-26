@@ -32,7 +32,7 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
 
 ### 2. Download & Extract Prebuilt Release
 
-1. Download the latest `WCS2-v1.0.5-linux-x64.zip` (or `.tar.gz`) archive from **[GitHub Releases](https://github.com/dAn0id/wcs2/releases)**.
+1. Download the latest `WCS2-v1.0.6-linux-x64.zip` (or `.tar.gz`) archive from **[GitHub Releases](https://github.com/dAn0id/wcs2/releases)**.
 2. Extract it into `game/csgo/addons/counterstrikesharp/plugins/` so the directory layout looks like:
    ```text
    game/csgo/addons/counterstrikesharp/
@@ -128,7 +128,7 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
 
 Restart your CS2 server and verify in the server console / RCON:
 - `meta list` -> `CounterStrikeSharp` loaded
-- `css_plugins list` -> `[#1:LOADED]: "WCS2" (1.0.5)`
+- `css_plugins list` -> `[#1:LOADED]: "WCS2" (1.0.6)`
 - Server startup logs confirm:
   - `[WCS2] Loaded 11 races across 3 categories.`
   - `[WCS2] Loaded 4 shop items.`

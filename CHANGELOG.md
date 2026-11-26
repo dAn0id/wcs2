@@ -4,6 +4,11 @@ All notable changes to **WCS2** are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] - 2026-11-26 — Auto-Updater Hot-Reload Verification Release
+
+### Changed
+- Version bump to `1.0.6` to verify in-game auto-updater hot-reload (`1.0.5` -> `1.0.6`).
+
 ## [1.0.5] - 2026-11-26 — In-Game Updater Hot-Reload Fix
 
 ### Fixed
@@ -60,6 +65,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Dash-Style Teleport Alternative:** Added the `teleport_dash` primitive (velocity launch + sound + electric/distort particles) and included a commented-out alternative in `human_alliance.json` using JSONC comment support.
 - **Automated Linux x64 Releases:** Added `.github/workflows/release.yml` to build, verify, and publish `.zip`, `.tar.gz`, and `SHA256SUMS.txt` artifacts on `v*` tags.
 
+[1.0.6]: https://github.com/dAn0id/wcs2/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/dAn0id/wcs2/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/dAn0id/wcs2/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/dAn0id/wcs2/compare/v1.0.2...v1.0.3

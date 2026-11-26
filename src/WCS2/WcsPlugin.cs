@@ -19,7 +19,7 @@ namespace WCS2;
 public sealed class WcsPlugin : BasePlugin, ISkillServices
 {
     public override string ModuleName => "WCS2";
-    public override string ModuleVersion => "1.0.5";
+    public override string ModuleVersion => "1.0.6";
     public override string ModuleAuthor => "dAn!EL";
     public override string ModuleDescription => "Warcraft:Source (WCS) RPG mod for CS2 CounterStrikeSharp";
 
