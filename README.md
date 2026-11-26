@@ -29,11 +29,11 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
 - **[Counter-Strike 2 Dedicated Server](https://developer.valvesoftware.com/wiki/Counter-Strike_2/Dedicated_Servers)** on **Linux x86_64**
 - **[Metamod:Source](https://www.sourcemm.net/downloads.php?branch=master)** `2.x` (`game/csgo/addons/metamod/` registered in `game/csgo/gameinfo.gi`)
 - **[CounterStrikeSharp](https://github.com/roflmuffin/CounterStrikeSharp/releases)** `v1.0.381+` (**`with-runtime` Linux x64** release bundling the **.NET 10.0** runtime)
-- **[CS2MenuManager](https://github.com/schwarper/CS2MenuManager/releases)** `v1.0.43+` extracted to `game/csgo/addons/counterstrikesharp/shared/CS2MenuManager/`
+- **[CS2MenuManager](https://github.com/schwarper/CS2MenuManager/releases)** `v1.0.43+` extracted to `game/csgo/addons/counterstrikesharp/shared/CS2MenuManager/` (including `config.toml`; `WCS2` loads it automatically on startup and `wcs_reload` so WASD navigation hints `W/S`, `E`, `Shift`, `Tab` display without needing the optional `CS2MenuManager_MenuManager` plugin)
 
 ### 2. Download & Extract Prebuilt Release
 
-1. Download the latest `WCS2-v1.0.1-linux-x64.zip` (or `.tar.gz`) archive from **[GitHub Releases](https://github.com/dAn0id/wcs2/releases)**.
+1. Download the latest `WCS2-v1.0.2-linux-x64.zip` (or `.tar.gz`) archive from **[GitHub Releases](https://github.com/dAn0id/wcs2/releases)**.
 2. Extract it into `game/csgo/addons/counterstrikesharp/plugins/` so the directory layout looks like:
    ```text
    game/csgo/addons/counterstrikesharp/
@@ -127,7 +127,7 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
 
 Restart your CS2 server and verify in the server console / RCON:
 - `meta list` -> `CounterStrikeSharp` loaded
-- `css_plugins list` -> `[#1:LOADED]: "WCS2" (1.0.1)`
+- `css_plugins list` -> `[#1:LOADED]: "WCS2" (1.0.2)`
 - Server startup logs confirm:
   - `[WCS2] Loaded 12 races across 3 categories.`
   - `[WCS2] Loaded 4 shop items.`

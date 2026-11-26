@@ -19,7 +19,7 @@ namespace WCS2;
 public sealed class WcsPlugin : BasePlugin, ISkillServices
 {
     public override string ModuleName => "WCS2";
-    public override string ModuleVersion => "1.0.1";
+    public override string ModuleVersion => "1.0.2";
     public override string ModuleAuthor => "dAn!EL";
     public override string ModuleDescription => "Warcraft:Source (WCS) RPG mod for CS2 CounterStrikeSharp";
 
@@ -74,6 +74,7 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
         _teleport = new TeleportService(_weapons, _tracer, _rng);
         _shop = new ShopService(_registry, _progression, _effects);
         _bots = new BotRaceService(_config, _registry, _progression, _rng);
+        ReloadMenuManagerConfig();
         _menus = new WcsMenuService(this, _config, _registry, _progression, _shop, _repo, _effects);
 
         _engine = new SkillExecutionEngine(this);
@@ -742,6 +743,7 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
             _registry.LoadAll(configDir);
             var gamedata = GamedataConfig.Load(configDir, Logger);
             _tracer.Reload(_config.UseNativeTrace, gamedata);
+            ReloadMenuManagerConfig();
             string msg = $"Reloaded WCS: {_registry.Races.Count} races, {_registry.Items.Count} items (use_native_trace={_config.UseNativeTrace}, gamedata_mode={gamedata.ResolutionMode}, tracer_available={_tracer.IsAvailable}).";
             if (p != null) _effects.PrintChat(p, msg);
             else Logger.LogInformation("[WCS2] {Msg}", msg);
@@ -761,6 +763,22 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
             if (p != null) _effects.PrintChat(p, msg);
             else Server.PrintToConsole(msg);
         });
+    }
+
+    private void ReloadMenuManagerConfig()
+    {
+        try
+        {
+            // CS2MenuManager does not auto-load shared/CS2MenuManager/config.toml unless
+            // ReloadConfig() is invoked; without it, [Buttons]/[WasdMenu]/[Lang] stay empty
+            // and WasdMenu renders raw "ScrollKey | SelectKey | ExitKey" instead of W/S, E, Tab.
+            CS2MenuManager.API.Class.MenuManager.ReloadConfig();
+            Logger.LogInformation("[WCS2] Loaded CS2MenuManager config.toml cleanly.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "[WCS2] Could not load shared/CS2MenuManager/config.toml; menu key hints may use defaults.");
+        }
     }
 
     private void RegisterTimers()
