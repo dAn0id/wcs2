@@ -8,9 +8,8 @@ A data-driven **CounterStrikeSharp** (`.NET 10.0`) port of **Warcraft:Source (WC
 
 ## Features
 
-- **12 Playable Races (50 Skills):**
-  - **Standard Races (11):** Archmage Proudmoore, Blood Mage, Crypt Lord, Flame Predator, Human Alliance, Night Elves, Orcish Horde, Shadow Hunter, Succubus Hunter, Undead Scourge, Warden
-  - **Custom Race:** Defiladed Destructor (steel oil-drum barrel disguise, P250 250-round clip, explosive physics barrels)
+- **11 Standard Races (47 Skills):**
+  - Archmage Proudmoore, Blood Mage, Crypt Lord, Flame Predator, Human Alliance, Night Elves, Orcish Horde, Shadow Hunter, Succubus Hunter, Undead Scourge, Warden
 - **4 Shop Items:** Belt of Vitality, Boots of Speed, Gem of Life, Rune of Wisdom
 - **Core WCS Progression:** Per-race XP & levels (`required_xp = 80 * level`), Rested XP (online & offline accumulation), Level Bank (with new-player bonus), Bot random race & ability support, and full `wcsadmin` management
 - **Source 2 Collision Tracing:** Automatic ELF64 RTTI/xref symbol resolution (`configs/gamedata.json` fallback/override) + standing/crouched player-hull validation prevents teleporting or spawning props inside walls, floors, ceilings, or solid props, plus an optional **Dash-style Teleport (`teleport_dash`)** alternative included in teleport race configs
@@ -67,7 +66,6 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
            │       ├── archmage_proudmoore.json
            │       ├── blood_mage.json
            │       ├── crypt_lord.json
-           │       ├── defiladed_destructor.json
            │       ├── flame_predator.json
            │       ├── human_alliance.json
            │       ├── night_elves.json
@@ -129,7 +127,7 @@ Restart your CS2 server and verify in the server console / RCON:
 - `meta list` -> `CounterStrikeSharp` loaded
 - `css_plugins list` -> `[#1:LOADED]: "WCS2" (1.0.2)`
 - Server startup logs confirm:
-  - `[WCS2] Loaded 12 races across 3 categories.`
+  - `[WCS2] Loaded 11 races across 3 categories.`
   - `[WCS2] Loaded 4 shop items.`
   - `[WCS2] SQLite database initialized cleanly.`
   - `[WCS2] Source2TraceEngine initialized cleanly (mode=auto): TraceShape=[dynamic-elf] ..., GTM*=[dynamic-elf] ..., FilterVtable=[dynamic-elf] ...`
@@ -192,4 +190,4 @@ Publishing with `-r linux-x64 --no-self-contained` is required so `Microsoft.Dat
 - `src/WCS2/Services/` — Combat/damage hooks, weapons/restrictions, visual/audio effects, ELF64 symbol resolver, Source 2 collision tracer & teleportation
 - `src/WCS2/Skills/` — Skill execution engine, composable `Primitives/`, and `CustomHandlers/`
 - `src/WCS2/Menus/` — `CS2MenuManager` menu flows
-- `src/WCS2/configs/` — Default server config, gamedata, 4 shop items, and 12 race definitions
+- `src/WCS2/configs/` — Default server config, gamedata, 4 shop items, and 11 standard race definitions
