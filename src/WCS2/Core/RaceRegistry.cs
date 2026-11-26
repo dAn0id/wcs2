@@ -56,6 +56,14 @@ public sealed class RaceRegistry
                     Directory.CreateDirectory(destParent);
 
                 File.Copy(srcPath, destPath, overwrite: false);
+                if (OperatingSystem.IsLinux() && destPath.EndsWith(".py", StringComparison.OrdinalIgnoreCase))
+                {
+                    File.SetUnixFileMode(
+                        destPath,
+                        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                        UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                        UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+                }
                 seeded++;
             }
 

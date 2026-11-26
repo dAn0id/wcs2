@@ -13,7 +13,7 @@ A data-driven **CounterStrikeSharp** (`.NET 10.0`) port of **Warcraft:Source (WC
 - **4 Shop Items:** Belt of Vitality, Boots of Speed, Gem of Life, Rune of Wisdom
 - **Core WCS Progression:** Per-race XP & levels (`required_xp = 80 * level`), Rested XP (online & offline accumulation), Level Bank (with new-player bonus), Bot random race & ability support, and full `wcsadmin` management
 - **Source 2 Collision Tracing:** Automatic ELF64 RTTI/xref symbol resolution (`configs/gamedata.json` fallback/override) + standing/crouched player-hull validation prevents teleporting or spawning props inside walls, floors, ceilings, or solid props, plus an optional **Dash-style Teleport (`teleport_dash`)** alternative included in teleport race configs
-- **Data-Driven Engine:** JSONC (comments & trailing commas supported) race & item configs (`configs/`) powered by composable skill primitives and bespoke custom handlers
+- **Data-Driven Engine:** JSONC (comments & trailing commas supported) race & item configs (`configs/`) powered by composable skill primitives, bespoke custom handlers, and a bundled interactive terminal **Race Builder TUI** (`configs/races/wcs2-race-builder.py`)
 - **Embedded SQLite Persistence:** Async WAL-mode SQLite database (`Microsoft.Data.Sqlite` + `Dapper`) auto-initialized on first boot
 - **Interactive Menus:** Built on `CS2MenuManager` (`WasdMenu`, `CenterHtmlMenu`, `ChatMenu`, `ConsoleMenu`)
 
@@ -32,7 +32,7 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
 
 ### 2. Download & Extract Prebuilt Release
 
-1. Download the latest `WCS2-v1.0.2-linux-x64.zip` (or `.tar.gz`) archive from **[GitHub Releases](https://github.com/dAn0id/wcs2/releases)**.
+1. Download the latest `WCS2-v1.0.3-linux-x64.zip` (or `.tar.gz`) archive from **[GitHub Releases](https://github.com/dAn0id/wcs2/releases)**.
 2. Extract it into `game/csgo/addons/counterstrikesharp/plugins/` so the directory layout looks like:
    ```text
    game/csgo/addons/counterstrikesharp/
@@ -57,7 +57,8 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
            │       ├── gamedata.json
            │       ├── items.json
            │       └── races/
-           │           └── *.json
+           │           ├── *.json
+           │           └── wcs2-race-builder.py
            ├── configs/                   # Auto-seeded from defaults/configs/ on first boot
            │   ├── wcs.json
            │   ├── gamedata.json
@@ -73,7 +74,8 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
            │       ├── shadow_hunter.json
            │       ├── succubus_hunter.json
            │       ├── undead_scourge.json
-           │       └── warden.json
+           │       ├── warden.json
+           │       └── wcs2-race-builder.py   # Interactive TUI race builder & validator
            └── data/                      # Auto-created on first boot
                └── wcs2.sqlite            # Fresh WAL-mode SQLite DB
    ```
@@ -125,7 +127,7 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
 
 Restart your CS2 server and verify in the server console / RCON:
 - `meta list` -> `CounterStrikeSharp` loaded
-- `css_plugins list` -> `[#1:LOADED]: "WCS2" (1.0.2)`
+- `css_plugins list` -> `[#1:LOADED]: "WCS2" (1.0.3)`
 - Server startup logs confirm:
   - `[WCS2] Loaded 11 races across 3 categories.`
   - `[WCS2] Loaded 4 shop items.`
@@ -166,7 +168,25 @@ bind c ability
 
 ## Creating Custom Races
 
-`WCS2` is fully data-driven: server admins can create new races (or edit existing ones) purely in JSON without writing C# or recompiling.
+`WCS2` is fully data-driven: server admins can create new races (or edit existing ones) purely in JSON without writing C# or recompiling — either with the bundled **interactive TUI Race Builder** or by editing JSON directly.
+
+### Interactive TUI Race Builder (`wcs2-race-builder.py`)
+
+`WCS2` ships a zero-dependency Python 3 (`curses`) interactive wizard directly inside `configs/races/` for creating, editing, and validating custom races over SSH or a local terminal:
+
+```bash
+cd game/csgo/addons/counterstrikesharp/plugins/WCS2/configs/races
+./wcs2-race-builder.py
+```
+
+- **Guided 3-Step Wizard:** Create a brand-new race or load & edit any existing `*.json` file in `configs/races/` — pick triggers, browse all **34 built-in primitives** and **6 custom handlers**, configure targets, linearly interpolate `level_values` (`Start -> End`), preview live validated JSON, and save directly as `./<race_key>.json`.
+- **Activate Live:** After saving, run `wcs_reload` in your CS2 server console / RCON to load the new race without restarting.
+- **Useful CLI Options:**
+  ```bash
+  ./wcs2-race-builder.py --load human_alliance.json   # Open an existing race directly in the TUI
+  ./wcs2-race-builder.py --list-skills                # Print all 34 primitives & 6 custom handlers
+  ./wcs2-race-builder.py --validate *.json            # Validate one or more race JSON/JSONC files
+  ```
 
 ### 1. Where to Add Custom Races & Hot-Reload
 
