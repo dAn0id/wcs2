@@ -2,7 +2,7 @@
 
 # WCS2 — Warcraft:Source for Counter-Strike 2
 
-A data-driven **CounterStrikeSharp** (`.NET 10.0`) port of **Warcraft:Source (WCS)** for **Counter-Strike 2 Linux x64** dedicated servers.
+A data-driven **CounterStrikeSharp** (`.NET 10.0`) port of **Warcraft:Source (WCS)** by [ThaPwned](https://github.com/ThaPwned/WCS) for **Counter-Strike 2** on **Linux x64** dedicated servers.
 
 > **Platform Support:** **Linux x86_64 dedicated servers only.** Native Source 2 collision tracing (`ElfSymbolResolver` + `Source2TraceEngine`) and the bundled `libe_sqlite3.so` binary target Linux x64.
 
