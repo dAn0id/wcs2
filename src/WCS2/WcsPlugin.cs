@@ -1,3 +1,4 @@
+using System.Drawing;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
@@ -19,7 +20,7 @@ namespace WCS2;
 public sealed class WcsPlugin : BasePlugin, ISkillServices
 {
     public override string ModuleName => "WCS2";
-    public override string ModuleVersion => "1.0.7";
+    public override string ModuleVersion => "1.0.8";
     public override string ModuleAuthor => "dAn!EL";
     public override string ModuleDescription => "Warcraft:Source (WCS) RPG mod for CS2 CounterStrikeSharp";
 
@@ -39,6 +40,8 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
     private WcsMenuService _menus = null!;
     private ISkillExecutionEngine _engine = null!;
     private readonly Random _rng = new();
+    private readonly HashSet<uint> _processedFireballs = new();
+    private readonly Dictionary<int, bool> _lastThrowExcludedIncendiary = new();
 
     // ISkillServices implementation
     WcsConfig ISkillServices.Config => _config;
@@ -138,6 +141,9 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
             if (!string.IsNullOrWhiteSpace(_config.DefaultCtAgentModel))
                 manifest.AddResource(_config.DefaultCtAgentModel);
             manifest.AddResource("models/chicken/chicken.vmdl");
+            manifest.AddResource("models/weapons/w_muzzlefireshape.vmdl");
+            manifest.AddResource("particles/inferno_fx/molotov_fire01.vpcf");
+            manifest.AddResource("particles/survival_fx/gas_cannister_impact.vpcf");
             manifest.AddResource("particles/ui/ui_electric_exp_glow.vpcf");
             manifest.AddResource("particles/explosions_fx/explosion_smokegrenade_distort.vpcf");
         });
@@ -150,6 +156,8 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
 
         RegisterListener<Listeners.OnMapStart>(_ =>
         {
+            _processedFireballs.Clear();
+            _lastThrowExcludedIncendiary.Clear();
             _updater.OnMapStart();
         });
 
@@ -441,6 +449,8 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
 
         RegisterEventHandler<EventRoundStart>((ev, _) =>
         {
+            _processedFireballs.Clear();
+            _lastThrowExcludedIncendiary.Clear();
             _state.ClearAllRoundProcCounts();
             _engine.OnRoundStart();
             foreach (var p in Utilities.GetPlayers())
@@ -483,6 +493,135 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
 
             _shop.OnRoundEnd(sessions);
             _progression.SaveAllDirty();
+            return HookResult.Continue;
+        });
+
+        RegisterEventHandler<EventGrenadeThrown>((ev, _) =>
+        {
+            var player = ev.Userid;
+            if (player == null || !player.IsValid) return HookResult.Continue;
+            if (!_state.TryGetExplosiveMolotov(player.Slot, out var cfg)) return HookResult.Continue;
+
+            string weapon = (ev.Weapon ?? string.Empty).Trim();
+            bool isMolotov = weapon.Equals("molotov", StringComparison.OrdinalIgnoreCase)
+                             || weapon.Equals("weapon_molotov", StringComparison.OrdinalIgnoreCase);
+            bool isIncendiary = weapon.Equals("incgrenade", StringComparison.OrdinalIgnoreCase)
+                                || weapon.Equals("weapon_incgrenade", StringComparison.OrdinalIgnoreCase);
+            if (!isMolotov && !isIncendiary)
+                return HookResult.Continue;
+
+            if (!isMolotov && !cfg.IncludeIncendiary)
+            {
+                _lastThrowExcludedIncendiary[player.Slot] = true;
+                return HookResult.Continue;
+            }
+            _lastThrowExcludedIncendiary[player.Slot] = false;
+
+            int slot = player.Slot;
+            Server.NextFrame(() =>
+            {
+                var p = Utilities.GetPlayerFromSlot(slot);
+                if (!PlayerStateManager.TryGetAlivePawn(p, out var pawn)) return;
+                if (!_state.TryGetExplosiveMolotov(slot, out var activeCfg)) return;
+
+                CMolotovProjectile? molotov = null;
+                foreach (var name in new[] { "molotov_projectile", "incgrenade_projectile" })
+                {
+                    foreach (var ent in Utilities.FindAllEntitiesByDesignerName<CMolotovProjectile>(name))
+                    {
+                        if (ent == null || !ent.IsValid) continue;
+                        if (_processedFireballs.Contains(ent.Index)) continue;
+                        if (ent.Thrower?.Value?.Index != pawn.Index) continue;
+                        if (molotov == null || ent.Index > molotov.Index)
+                            molotov = ent;
+                    }
+                }
+
+                if (molotov == null || !molotov.IsValid) return;
+                _processedFireballs.Add(molotov.Index);
+
+                if (activeCfg.LaunchSpeed > 0f && pawn.AbsOrigin is { } pawnOrigin)
+                {
+                    float eyeZ = pawn.CameraServices?.OldPlayerViewOffsetZ > 0f
+                        ? pawn.CameraServices.OldPlayerViewOffsetZ
+                        : 64f;
+                    var eyePos = new Vector(pawnOrigin.X, pawnOrigin.Y, pawnOrigin.Z + eyeZ);
+                    var angles = pawn.EyeAngles;
+                    float pitchRad = angles.X * (MathF.PI / 180f);
+                    float yawRad = angles.Y * (MathF.PI / 180f);
+                    float cosPitch = MathF.Cos(pitchRad);
+                    var forward = new Vector(
+                        cosPitch * MathF.Cos(yawRad),
+                        cosPitch * MathF.Sin(yawRad),
+                        -MathF.Sin(pitchRad));
+
+                    var spawnPos = new Vector(
+                        eyePos.X + forward.X * 16f,
+                        eyePos.Y + forward.Y * 16f,
+                        eyePos.Z + forward.Z * 16f);
+                    float speed = Math.Clamp(activeCfg.LaunchSpeed, 50f, 3500f);
+                    var velocity = new Vector(forward.X * speed, forward.Y * speed, forward.Z * speed);
+                    molotov.Teleport(spawnPos, molotov.AbsRotation ?? QAngle.Zero, velocity);
+                }
+
+                if (activeCfg.FireballVisuals)
+                {
+                    if (!string.IsNullOrWhiteSpace(activeCfg.FireballModel))
+                        molotov.SetModel(activeCfg.FireballModel);
+
+                    molotov.Render = Color.OrangeRed;
+                    Utilities.SetStateChanged(molotov, "CBaseModelEntity", "m_clrRender");
+
+                    if (!string.IsNullOrWhiteSpace(activeCfg.TrailParticle) && molotov.AbsOrigin is { } mPos)
+                    {
+                        _effects.SpawnParticle(mPos, activeCfg.TrailParticle, 5f, molotov);
+                    }
+                }
+            });
+
+            return HookResult.Continue;
+        });
+
+        RegisterEventHandler<EventMolotovDetonate>((ev, _) =>
+        {
+            var player = ev.Userid;
+            if (player == null || !player.IsValid) return HookResult.Continue;
+            if (!_state.TryGetExplosiveMolotov(player.Slot, out var cfg)) return HookResult.Continue;
+            if (!cfg.IncludeIncendiary && _lastThrowExcludedIncendiary.TryGetValue(player.Slot, out bool excluded) && excluded)
+                return HookResult.Continue;
+
+            var origin = new Vector(ev.X, ev.Y, ev.Z);
+            float radius = MathF.Max(1f, cfg.Radius);
+
+            foreach (var enemy in _combat.GetPlayersInRadius(origin, radius, teamFilter: null, exclude: player, aliveOnly: true))
+            {
+                if (enemy.Team != CsTeam.Terrorist && enemy.Team != CsTeam.CounterTerrorist) continue;
+                if (!_config.FfaEnabled && enemy.Team == player.Team) continue;
+                if (!PlayerStateManager.TryGetAlivePawn(enemy, out var enemyPawn) || enemyPawn.AbsOrigin is not { } enemyOrigin) continue;
+
+                float dx = enemyOrigin.X - origin.X;
+                float dy = enemyOrigin.Y - origin.Y;
+                float dz = enemyOrigin.Z - origin.Z;
+                float dist = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+                if (dist > radius) continue;
+
+                float falloff = MathF.Max(0f, 1f - (dist / radius));
+                float dmg = MathF.Max(cfg.MinDamage, MathF.Floor(cfg.BaseDamage * falloff));
+                if (dmg > 0f)
+                {
+                    _combat.DealDamage(enemy, player, dmg, "molotov", ignoreArmor: false, isSkillDamage: true);
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(cfg.ImpactParticle1))
+            {
+                _effects.SpawnParticle(new Vector(origin.X, origin.Y, origin.Z + 10f), cfg.ImpactParticle1, 3f);
+            }
+            if (!string.IsNullOrWhiteSpace(cfg.ImpactParticle2))
+            {
+                _effects.SpawnParticle(origin, cfg.ImpactParticle2, 3f);
+            }
+
             return HookResult.Continue;
         });
 

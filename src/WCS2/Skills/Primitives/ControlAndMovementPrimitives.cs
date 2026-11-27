@@ -317,6 +317,49 @@ public sealed class TeleportDashPrimitive : ISkillPrimitive
     }
 }
 
+public sealed class AirDashPrimitive : ISkillPrimitive
+{
+    public const string DefaultSound = "Default.WalkJump";
+
+    public string Type => "air_dash";
+
+    public void Execute(SkillContext ctx, SkillActionConfig action)
+    {
+        var target = ctx.ResolveSingleTarget(action.Target);
+        if (!SkillHelpers.IsAlive(target))
+        {
+            ctx.Activated = false;
+            return;
+        }
+
+        float force = Math.Clamp(action.GetLevelFloat("force", ctx.SkillLevel, 800f), 200f, 2500f);
+        float cooldown = Math.Clamp(action.GetLevelFloat("cooldown", ctx.SkillLevel, 4.0f), 0f, 60f);
+        float minZ = Math.Clamp(action.GetLevelFloat("min_z", ctx.SkillLevel, 0.275f), 0f, 1.0f);
+        float airDelay = Math.Clamp(action.GetLevelFloat("air_delay", ctx.SkillLevel, 0.12f), 0.02f, 1.0f);
+        float gracePeriod = Math.Clamp(action.GetLevelFloat("grace_period", ctx.SkillLevel, 0.20f), 0f, 2.0f);
+        float duration = MathF.Max(0f, action.GetLevelFloat("duration", ctx.SkillLevel, 0f));
+        string sound = action.GetString("sound", DefaultSound);
+        float soundVolume = Math.Clamp(action.GetLevelFloat("sound_volume", ctx.SkillLevel, 0.5f), 0.05f, 1.0f);
+        string rawMessage = action.GetString("message");
+        string message = string.IsNullOrEmpty(rawMessage)
+            ? string.Empty
+            : SkillHelpers.FormatMessage(rawMessage, ctx, value: ((int)Math.Round(force)).ToString(), duration: duration.ToString("0.#"));
+
+        var cfg = new AirDashConfig(
+            Force: force,
+            Cooldown: cooldown,
+            MinZ: minZ,
+            AirPressDelay: airDelay,
+            GracePeriod: gracePeriod,
+            Sound: sound,
+            SoundVolume: soundVolume,
+            Message: message);
+
+        ctx.Services.State.SetAirDash(target!, cfg, duration);
+        ctx.Activated = true;
+    }
+}
+
 public sealed class RespawnPrimitive : ISkillPrimitive
 {
     private readonly RoundTracker _roundTracker;

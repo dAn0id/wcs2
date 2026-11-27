@@ -4,6 +4,19 @@ All notable changes to **WCS2** are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.8] - 2026-11-27 — Pyromancer Race & 3 New Skill Primitives
+
+### Added
+- **New Standard Race — Pyromancer (`configs/races/pyromancer.json`, 12 Standard Races total):** Unlocked at total level 60, featuring **Explosive Throwables** (`explosive_molotov`), **Restock Throwables** (`instant_restock`), **Ignite Enemies** (`burn_dot`), and **Solar Detonation** (`aim_explosion` ultimate).
+- **3 New Skill Primitives (43 Built-In Total):**
+  - `explosive_molotov` — Transforms thrown Molotovs/Incendiaries into high-speed orange-red fireballs (`w_muzzlefireshape.vmdl` + parented `molotov_fire01.vpcf` trail) that detonate in a distance-falloff AoE blast with impact particles (`gas_cannister_impact.vpcf` & `ui_electric_exp_glow.vpcf`).
+  - `aim_explosion` — Crosshair-targeted AoE fire explosion with Source 2 line-of-sight tracing, distance-falloff damage, burn particles/sound, and automatic cooldown refund if out of range or blocked.
+  - `air_dash` — Passive per-tick midair WASD double-jump dash with `FL_ONGROUND` jump-off arming, air press delay, directional launch velocity, and per-dash cooldown.
+- **Race Builder & Docs:** Updated `configs/races/wcs2-race-builder.py` (43 primitives, 12 shipped races validated) and `README.md` with full documentation for all new primitives and Pyromancer.
+
+### Fixed
+- **Shared CS2 Fire-Grenade Slot in `instant_restock`:** `only_if_missing` now checks both `weapon_molotov` and `weapon_incgrenade` together so players carrying either team's fire grenade are not double-granted.
+
 ## [1.0.7] - 2026-11-26 — Version Command
 
 ### Added
@@ -70,6 +83,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Dash-Style Teleport Alternative:** Added the `teleport_dash` primitive (velocity launch + sound + electric/distort particles) and included a commented-out alternative in `human_alliance.json` using JSONC comment support.
 - **Automated Linux x64 Releases:** Added `.github/workflows/release.yml` to build, verify, and publish `.zip`, `.tar.gz`, and `SHA256SUMS.txt` artifacts on `v*` tags.
 
+[1.0.8]: https://github.com/dAn0id/wcs2/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/dAn0id/wcs2/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/dAn0id/wcs2/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/dAn0id/wcs2/compare/v1.0.4...v1.0.5

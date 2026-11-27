@@ -147,6 +147,28 @@ public interface ISkillServices
     void RunNextFrame(Action action);
 }
 
+public sealed record ExplosiveMolotovConfig(
+    float BaseDamage = 80f,
+    float MinDamage = 5f,
+    float Radius = 250f,
+    float LaunchSpeed = 1800f,
+    bool IncludeIncendiary = true,
+    bool FireballVisuals = true,
+    string TrailParticle = "particles/inferno_fx/molotov_fire01.vpcf",
+    string ImpactParticle1 = "particles/survival_fx/gas_cannister_impact.vpcf",
+    string ImpactParticle2 = "particles/ui/ui_electric_exp_glow.vpcf",
+    string FireballModel = "models/weapons/w_muzzlefireshape.vmdl");
+
+public sealed record AirDashConfig(
+    float Force = 800f,
+    float Cooldown = 4.0f,
+    float MinZ = 0.275f,
+    float AirPressDelay = 0.12f,
+    float GracePeriod = 0.20f,
+    string Sound = "Default.WalkJump",
+    float SoundVolume = 0.5f,
+    string Message = "");
+
 public interface IPlayerStateManager
 {
     void ResetTransientState(CCSPlayerController player, bool isDisconnect = false);
@@ -176,6 +198,9 @@ public interface IPlayerStateManager
     float GetInfiniteAmmoChance(int slot);
     int GetRoundProcCount(int slot, string key);
     int IncrementRoundProcCount(int slot, string key);
+    void SetExplosiveMolotov(CCSPlayerController player, ExplosiveMolotovConfig config, float durationSeconds = 0f);
+    bool TryGetExplosiveMolotov(int slot, out ExplosiveMolotovConfig config);
+    void SetAirDash(CCSPlayerController player, AirDashConfig config, float durationSeconds = 0f);
     void SetPropDisguise(CCSPlayerController player, string modelPath);
     void ClearPropDisguise(CCSPlayerController player);
     void TrackSpawnedEntity(CCSPlayerController player, CBaseEntity entity);
@@ -220,7 +245,7 @@ public interface IEffectsService
     void DrawBeamPoints(Vector start, Vector end, Color color, float width = 2f, float duration = 1f);
     void DrawBeamRing(Vector center, float radius, Color color, float width = 2f, float duration = 1f, int segments = 16, float zOffset = 10f);
     void SpawnParticle(string effectName, Vector origin, float duration = 2f);
-    void SpawnParticle(Vector origin, string particlePath, float durationSeconds = 3f);
+    void SpawnParticle(Vector origin, string particlePath, float durationSeconds = 3f, CBaseEntity? parent = null);
     void SendFade(CCSPlayerController player, Color color, int durationMs, int holdTimeMs, int flags = 0x0001);
     void SendShake(CCSPlayerController player, float amplitude, float frequency, float duration);
     void PlaySound(CCSPlayerController player, string soundEvent);

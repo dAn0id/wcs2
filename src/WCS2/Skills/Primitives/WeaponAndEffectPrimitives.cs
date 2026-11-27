@@ -307,3 +307,54 @@ public sealed class InstantRestockPrimitive : ISkillPrimitive
         }, repeat: true, tag: tag);
     }
 }
+
+public sealed class ExplosiveMolotovPrimitive : ISkillPrimitive
+{
+    public string Type => "explosive_molotov";
+
+    public void Execute(SkillContext ctx, SkillActionConfig action)
+    {
+        var target = ctx.ResolveSingleTarget(action.Target);
+        if (!SkillHelpers.IsAlive(target))
+        {
+            ctx.Activated = false;
+            return;
+        }
+
+        float baseDamage = MathF.Max(0f, action.GetLevelFloat("damage", ctx.SkillLevel, 80f));
+        float minDamage = MathF.Max(0f, action.GetLevelFloat("min_damage", ctx.SkillLevel, 5f));
+        float radius = MathF.Max(1f, action.GetLevelFloat("radius", ctx.SkillLevel, 250f));
+        float launchSpeed = Math.Clamp(action.GetLevelFloat("speed", ctx.SkillLevel, 1800f), 0f, 4000f);
+        float duration = MathF.Max(0f, action.GetLevelFloat("duration", ctx.SkillLevel, 0f));
+        bool includeIncendiary = action.GetBool("include_incendiary", true);
+        bool fireballVisuals = action.GetBool("fireball_visuals", true);
+
+        var defaults = new ExplosiveMolotovConfig();
+        string trailParticle = action.GetString("trail_particle");
+        string impact1 = action.GetString("impact_particle_1");
+        string impact2 = action.GetString("impact_particle_2");
+        string fireballModel = action.GetString("fireball_model");
+
+        var cfg = new ExplosiveMolotovConfig(
+            BaseDamage: baseDamage,
+            MinDamage: minDamage,
+            Radius: radius,
+            LaunchSpeed: launchSpeed,
+            IncludeIncendiary: includeIncendiary,
+            FireballVisuals: fireballVisuals,
+            TrailParticle: string.IsNullOrWhiteSpace(trailParticle) ? defaults.TrailParticle : trailParticle,
+            ImpactParticle1: string.IsNullOrWhiteSpace(impact1) ? defaults.ImpactParticle1 : impact1,
+            ImpactParticle2: string.IsNullOrWhiteSpace(impact2) ? defaults.ImpactParticle2 : impact2,
+            FireballModel: string.IsNullOrWhiteSpace(fireballModel) ? defaults.FireballModel : fireballModel);
+
+        ctx.Services.State.SetExplosiveMolotov(target!, cfg, duration);
+
+        string msg = action.GetString("message");
+        if (!string.IsNullOrEmpty(msg))
+        {
+            string dmgStr = ((int)Math.Round(baseDamage)).ToString();
+            string durStr = duration.ToString("0.#");
+            ctx.Services.Effects.PrintChat(target!, SkillHelpers.FormatMessage(msg, ctx, value: dmgStr, damage: dmgStr, duration: durStr));
+        }
+    }
+}

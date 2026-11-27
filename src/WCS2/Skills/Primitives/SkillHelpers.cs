@@ -226,6 +226,15 @@ internal static class SkillHelpers
         return w.Contains("knife") || w.Contains("bayonet") || w == "weapon_melee" || w == "melee";
     }
 
+    public static bool IsFireGrenade(string weaponName)
+    {
+        if (string.IsNullOrWhiteSpace(weaponName))
+            return false;
+
+        string w = weaponName.ToLowerInvariant();
+        return w is "weapon_molotov" or "weapon_incgrenade" or "molotov" or "incgrenade";
+    }
+
     public static Color ReadColor(SkillActionConfig action, string arrayKey, Color fallback)
     {
         if (action.Params.TryGetValue(arrayKey, out var el) && el.ValueKind == JsonValueKind.Array)
@@ -382,6 +391,7 @@ internal static class SkillHelpers
 
         string targetNorm = weapons.NormalizeWeaponName(weaponName).ToLowerInvariant();
         bool targetIsKnife = IsKnifeWeapon(targetNorm);
+        bool targetIsFireNade = IsFireGrenade(targetNorm);
 
         foreach (var handle in myWeapons)
         {
@@ -391,6 +401,8 @@ internal static class SkillHelpers
 
             string actual = weapons.NormalizeWeaponName(wep.DesignerName).ToLowerInvariant();
             if (targetIsKnife && IsKnifeWeapon(actual))
+                return true;
+            if (targetIsFireNade && IsFireGrenade(actual))
                 return true;
             if (string.Equals(actual, targetNorm, StringComparison.OrdinalIgnoreCase))
                 return true;

@@ -34,6 +34,15 @@ public sealed class PlayerStateManager : IPlayerStateManager
         public float BaseScale { get; set; } = 1.0f;
         public float PassiveInfiniteAmmoChance { get; set; } = 0f;
         public float TimedInfiniteAmmoChance { get; set; } = 0f;
+        public ExplosiveMolotovConfig? PassiveExplosiveMolotov { get; set; }
+        public ExplosiveMolotovConfig? TimedExplosiveMolotov { get; set; }
+        public AirDashConfig? PassiveAirDash { get; set; }
+        public AirDashConfig? TimedAirDash { get; set; }
+        public ulong AirDashPrevButtons { get; set; }
+        public bool AirDashJumpedOff { get; set; }
+        public float AirDashAirSince { get; set; } = -1f;
+        public float AirDashArmedAt { get; set; }
+        public float AirDashNextReadyAt { get; set; }
         public bool HiddenFromEnemies { get; set; }
         public CDynamicProp? DisguiseProp { get; set; }
         public uint DisguisePropIndex { get; set; }
@@ -157,6 +166,15 @@ public sealed class PlayerStateManager : IPlayerStateManager
             state.BaseScale = 1.0f;
             state.PassiveInfiniteAmmoChance = 0f;
             state.TimedInfiniteAmmoChance = 0f;
+            state.PassiveExplosiveMolotov = null;
+            state.TimedExplosiveMolotov = null;
+            state.PassiveAirDash = null;
+            state.TimedAirDash = null;
+            state.AirDashPrevButtons = 0UL;
+            state.AirDashJumpedOff = false;
+            state.AirDashAirSince = -1f;
+            state.AirDashArmedAt = 0f;
+            state.AirDashNextReadyAt = 0f;
             state.HiddenFromEnemies = false;
             state.CustomData.Clear();
             state.RoundProcCounts.Clear();
@@ -641,6 +659,77 @@ public sealed class PlayerStateManager : IPlayerStateManager
             st.RoundProcCounts.Clear();
     }
 
+    public void SetExplosiveMolotov(CCSPlayerController player, ExplosiveMolotovConfig config, float durationSeconds = 0f)
+    {
+        if (!player.IsValid || config == null) return;
+        var state = GetOrCreate(player.Slot);
+
+        if (durationSeconds <= 0f)
+        {
+            state.PassiveExplosiveMolotov = config;
+            return;
+        }
+
+        CancelPlayerTimers(player, "explosive_molotov_temp");
+        state.TimedExplosiveMolotov = config;
+        int slot = player.Slot;
+        SchedulePlayerTimer(player, durationSeconds, () =>
+        {
+            if (_states.TryGetValue(slot, out var st))
+                st.TimedExplosiveMolotov = null;
+        }, repeat: false, tag: "explosive_molotov_temp");
+    }
+
+    public bool TryGetExplosiveMolotov(int slot, out ExplosiveMolotovConfig config)
+    {
+        if (_states.TryGetValue(slot, out var st))
+        {
+            var active = st.TimedExplosiveMolotov ?? st.PassiveExplosiveMolotov;
+            if (active != null)
+            {
+                config = active;
+                return true;
+            }
+        }
+        config = null!;
+        return false;
+    }
+
+    public void SetAirDash(CCSPlayerController player, AirDashConfig config, float durationSeconds = 0f)
+    {
+        if (!player.IsValid || config == null) return;
+        var state = GetOrCreate(player.Slot);
+
+        ulong initButtons = 0UL;
+        if (TryGetAlivePawn(player, out var pawn))
+        {
+            var buttons = pawn.MovementServices?.As<CCSPlayer_MovementServices>()?.Buttons;
+            if (buttons != null && buttons.ButtonStates.Length > 0)
+                initButtons = buttons.ButtonStates[0];
+        }
+
+        state.AirDashPrevButtons = initButtons;
+        state.AirDashJumpedOff = false;
+        state.AirDashAirSince = -1f;
+        state.AirDashArmedAt = Server.CurrentTime;
+        state.AirDashNextReadyAt = 0f;
+
+        if (durationSeconds <= 0f)
+        {
+            state.PassiveAirDash = config;
+            return;
+        }
+
+        CancelPlayerTimers(player, "air_dash_temp");
+        state.TimedAirDash = config;
+        int slot = player.Slot;
+        SchedulePlayerTimer(player, durationSeconds, () =>
+        {
+            if (_states.TryGetValue(slot, out var st))
+                st.TimedAirDash = null;
+        }, repeat: false, tag: "air_dash_temp");
+    }
+
     public void SetPropDisguise(CCSPlayerController player, string modelPath)
     {
         if (!TryGetAlivePawn(player, out var pawn)) return;
@@ -808,7 +897,8 @@ public sealed class PlayerStateManager : IPlayerStateManager
         {
             // Fast skip if nothing tick-relevant is active for this player
             bool needsGravityCheck = Math.Abs(state.TargetGravity - 1.0f) > 0.01f || state.WasOnLadder;
-            if (!needsGravityCheck && !state.JetpackEnabled && !state.NoRecoilEnabled) continue;
+            AirDashConfig? airDashCfg = state.TimedAirDash ?? state.PassiveAirDash;
+            if (!needsGravityCheck && !state.JetpackEnabled && !state.NoRecoilEnabled && airDashCfg == null) continue;
 
             var player = Utilities.GetPlayerFromSlot(slot);
             if (!TryGetAlivePawn(player, out var pawn)) continue;
@@ -835,6 +925,73 @@ public sealed class PlayerStateManager : IPlayerStateManager
             {
                 var csWeapon = new CCSWeaponBase(rw.Handle);
                 csWeapon.AccuracyPenalty = 0f;
+            }
+
+            // Passive midair double-jump directional dash (air_dash)
+            if (airDashCfg != null)
+            {
+                var buttons = pawn.MovementServices?.As<CCSPlayer_MovementServices>()?.Buttons;
+                if (buttons != null && buttons.ButtonStates.Length > 0)
+                {
+                    ulong currentButtons = buttons.ButtonStates[0];
+                    bool jumpDown = (currentButtons & (ulong)PlayerButtons.Jump) != 0;
+                    bool jumpPressed = (state.AirDashPrevButtons & (ulong)PlayerButtons.Jump) == 0 && jumpDown;
+                    bool onGround = (pawn.Flags & (uint)PlayerFlags.FL_ONGROUND) != 0;
+                    float now = Server.CurrentTime;
+
+                    if (onGround)
+                    {
+                        state.AirDashAirSince = -1f;
+                        state.AirDashJumpedOff = jumpDown;
+                    }
+                    else if (state.AirDashAirSince < 0f)
+                    {
+                        state.AirDashAirSince = now;
+                        state.AirDashJumpedOff = state.AirDashJumpedOff || jumpDown;
+                    }
+
+                    if (!onGround
+                        && state.AirDashJumpedOff
+                        && jumpPressed
+                        && now > state.AirDashAirSince + airDashCfg.AirPressDelay
+                        && now > state.AirDashArmedAt + airDashCfg.GracePeriod
+                        && now >= state.AirDashNextReadyAt)
+                    {
+                        float yawOffset = (currentButtons & (ulong)PlayerButtons.Back) != 0 ? 180f
+                            : (currentButtons & (ulong)PlayerButtons.Moveleft) != 0 ? 90f
+                            : (currentButtons & (ulong)PlayerButtons.Moveright) != 0 ? -90f
+                            : 0f;
+                        float yawDeg = pawn.EyeAngles.Y + yawOffset;
+                        float pitchRad = pawn.EyeAngles.X * (MathF.PI / 180f);
+                        float yawRad = yawDeg * (MathF.PI / 180f);
+                        float cosPitch = MathF.Cos(pitchRad);
+                        float dx = cosPitch * MathF.Cos(yawRad);
+                        float dy = cosPitch * MathF.Sin(yawRad);
+                        float dz = -MathF.Sin(pitchRad);
+                        if (dz < airDashCfg.MinZ) dz = airDashCfg.MinZ;
+
+                        pawn.Teleport(null, null, new Vector(dx * airDashCfg.Force, dy * airDashCfg.Force, dz * airDashCfg.Force));
+
+                        state.AirDashJumpedOff = false;
+                        state.AirDashNextReadyAt = now + airDashCfg.Cooldown;
+
+                        if (!string.IsNullOrWhiteSpace(airDashCfg.Sound))
+                        {
+                            try
+                            {
+                                pawn.EmitSound(airDashCfg.Sound, volume: Math.Clamp(airDashCfg.SoundVolume, 0.05f, 1.0f));
+                            }
+                            catch { /* ignore invalid sound event */ }
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(airDashCfg.Message) && !player!.IsBot)
+                        {
+                            player.PrintToChat($" {ChatColors.Green}[WCS]{ChatColors.Default} {airDashCfg.Message}");
+                        }
+                    }
+
+                    state.AirDashPrevButtons = currentButtons;
+                }
             }
         }
     }

@@ -47,12 +47,14 @@ public sealed class SkillExecutionEngine : ISkillExecutionEngine
         RegisterPrimitive(new RandomEnemyDrainPrimitive());
         RegisterPrimitive(new CheatDeathPrimitive());
         RegisterPrimitive(new SplashDamagePrimitive());
+        RegisterPrimitive(new AimExplosionPrimitive());
 
         RegisterPrimitive(new FreezePrimitive());
         RegisterPrimitive(new AoEFreezePrimitive());
         RegisterPrimitive(new PushPrimitive());
         RegisterPrimitive(new TeleportPrimitive());
         RegisterPrimitive(new TeleportDashPrimitive());
+        RegisterPrimitive(new AirDashPrimitive());
         RegisterPrimitive(new RespawnPrimitive(_roundTracker));
         RegisterPrimitive(new ReviveTeammatePrimitive(_roundTracker));
         RegisterPrimitive(new ShakePrimitive());
@@ -62,6 +64,7 @@ public sealed class SkillExecutionEngine : ISkillExecutionEngine
         RegisterPrimitive(new DropWeaponPrimitive());
         RegisterPrimitive(new SetClipAmmoPrimitive());
         RegisterPrimitive(new InstantRestockPrimitive(_roundTracker));
+        RegisterPrimitive(new ExplosiveMolotovPrimitive());
         RegisterPrimitive(new BeamPrimitive());
         RegisterPrimitive(new BeamRingPrimitive());
         RegisterPrimitive(new SoundPrimitive());

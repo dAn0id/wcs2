@@ -1,0 +1,121 @@
+{
+  "key": "pyromancer",
+  "name": "Pyromancer",
+  "author": "dAn!EL",
+  "description": "Master of fire — explosive throwables, burning bullets, and targeted fire blasts",
+  "required_level": 60,
+  "max_level": 0,
+  "team_limit": 0,
+  "restrict_team": 0,
+  "categories": [
+    "Standard races",
+    "All races"
+  ],
+  "skills": [
+    {
+      "key": "explosive_throwables",
+      "name": "Explosive Throwables",
+      "description": "Molotovs and Incendiaries explode on detonation for 35-70 AoE damage (radius 140-280).",
+      "trigger": "PlayerSpawn",
+      "max_level": 8,
+      "required_level": 0,
+      "actions": [
+        {
+          "type": "explosive_molotov",
+          "target": "self",
+          "level_values": {
+            "damage": [35, 40, 45, 50, 55, 60, 65, 70],
+            "radius": [140, 160, 180, 200, 220, 240, 260, 280]
+          },
+          "params": {
+            "min_damage": 5,
+            "speed": 1800,
+            "duration": 0,
+            "include_incendiary": true,
+            "fireball_visuals": true,
+            "message": "Explosive Throwables active - Max. ({damage} AoE damage)."
+          }
+        }
+      ]
+    },
+    {
+      "key": "restock_throwables",
+      "name": "Restock Throwables",
+      "description": "Automatically restocks your Molotov every 10-3 seconds.",
+      "trigger": "PlayerSpawn",
+      "max_level": 8,
+      "required_level": 0,
+      "actions": [
+        {
+          "type": "instant_restock",
+          "target": "self",
+          "level_values": {
+            "interval": [10, 9, 8, 7, 6, 5, 4, 3]
+          },
+          "params": {
+            "weapon": "weapon_molotov",
+            "only_if_missing": true,
+            "immediate": true,
+            "duration": 0,
+            "max_grants": 0
+          }
+        }
+      ]
+    },
+    {
+      "key": "ignite_enemies",
+      "name": "Ignite Enemies",
+      "description": "18-46% chance on hit to ignite enemies for 2.0-5.5s, dealing 2-9 burn damage per tick.",
+      "trigger": "PlayerAttacker",
+      "max_level": 8,
+      "required_level": 0,
+      "chances": [18, 22, 26, 30, 34, 38, 42, 46],
+      "actions": [
+        {
+          "type": "burn_dot",
+          "target": "victim",
+          "level_values": {
+            "duration": [2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5],
+            "damage_per_tick": [2, 3, 4, 5, 6, 7, 8, 9]
+          },
+          "params": {
+            "interval": 0.75,
+            "prevent_stack_key": "pyro_ignite",
+            "color": [255, 90, 0],
+            "attacker_message": "Ignite - Target burning for {value}s!",
+            "victim_message": "Pyromancer ignited you for {value}s!"
+          }
+        }
+      ]
+    },
+    {
+      "key": "pyro_detonation",
+      "name": "Solar Detonation (Ultimate)",
+      "description": "Detonate a fiery blast directly beneath the enemy in your crosshair (35-70 AoE damage, radius 160-300).",
+      "trigger": "PlayerUltimate",
+      "max_level": 8,
+      "required_level": 8,
+      "cooldowns": [20, 18, 16, 14, 12, 10, 8, 6],
+      "actions": [
+        {
+          "type": "aim_explosion",
+          "target": "self",
+          "level_values": {
+            "damage": [35, 40, 45, 50, 55, 60, 65, 70],
+            "radius": [160, 180, 200, 220, 240, 260, 280, 300]
+          },
+          "params": {
+            "max_distance": 1500,
+            "min_damage": 10,
+            "aim_cone_degrees": 8.0,
+            "require_los": true,
+            "impact_particle_1": "particles/survival_fx/gas_cannister_impact.vpcf",
+            "impact_particle_2": "particles/ui/ui_electric_exp_glow.vpcf",
+            "sound": "UIPanorama.equip_musicKit",
+            "message": "Solar Detonation - Blasted target for up to {damage} AoE damage!"
+          }
+        }
+      ]
+    }
+  ]
+}

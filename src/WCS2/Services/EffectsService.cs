@@ -79,7 +79,7 @@ public sealed class EffectsService : IEffectsService
     public void SpawnParticle(string effectName, Vector origin, float duration = 2f)
         => SpawnParticle(origin, effectName, duration);
 
-    public void SpawnParticle(Vector origin, string particlePath, float durationSeconds = 3f)
+    public void SpawnParticle(Vector origin, string particlePath, float durationSeconds = 3f, CBaseEntity? parent = null)
     {
         if (string.IsNullOrWhiteSpace(particlePath)) return;
         var particle = Utilities.CreateEntityByName<CParticleSystem>("info_particle_system");
@@ -89,6 +89,10 @@ public sealed class EffectsService : IEffectsService
         particle.StartActive = true;
         particle.Teleport(origin, QAngle.Zero, Vector.Zero);
         particle.DispatchSpawn();
+        if (parent != null && parent.IsValid)
+        {
+            particle.AcceptInput("SetParent", parent, particle, "!activator");
+        }
         particle.AcceptInput("Start");
 
         _plugin.AddTimer(Math.Clamp(durationSeconds, 0.2f, 10.0f), () =>

@@ -659,3 +659,162 @@ public sealed class SplashDamagePrimitive : ISkillPrimitive
         }
     }
 }
+
+public sealed class AimExplosionPrimitive : ISkillPrimitive
+{
+    public const string DefaultImpactParticle1 = "particles/survival_fx/gas_cannister_impact.vpcf";
+    public const string DefaultImpactParticle2 = "particles/ui/ui_electric_exp_glow.vpcf";
+    public const string DefaultSound = "UIPanorama.equip_musicKit";
+
+    public string Type => "aim_explosion";
+
+    public void Execute(SkillContext ctx, SkillActionConfig action)
+    {
+        var owner = ctx.Owner;
+        var pawn = SkillHelpers.GetAlivePawn(owner);
+        if (pawn == null || pawn.AbsOrigin == null)
+        {
+            ctx.Activated = false;
+            return;
+        }
+
+        bool ffa = ctx.Services.Config.FfaEnabled || ctx.Services.Sessions.IsFriendlyFireAllowed();
+        CsTeam? enemyTeam = ffa ? null : SkillHelpers.GetEnemyTeam(owner.Team);
+        if (!ffa && enemyTeam == null)
+        {
+            ctx.Activated = false;
+            return;
+        }
+
+        float baseDamage = MathF.Max(0f, action.GetLevelFloat("damage", ctx.SkillLevel, 60f));
+        float minDamage = MathF.Max(0f, action.GetLevelFloat("min_damage", ctx.SkillLevel, 10f));
+        float radius = MathF.Max(1f, action.GetLevelFloat("radius", ctx.SkillLevel, 220f));
+        float maxDistance = MathF.Max(50f, action.GetLevelFloat("max_distance", ctx.SkillLevel, 1500f));
+        float aimConeDeg = Math.Clamp(action.GetLevelFloat("aim_cone_degrees", ctx.SkillLevel, 8.0f), 0.5f, 45f);
+        bool requireLos = action.GetBool("require_los", true);
+
+        float eyeZ = pawn.ViewOffset.Z > 1f ? pawn.ViewOffset.Z : 64f;
+        var eye = new Vector(pawn.AbsOrigin.X, pawn.AbsOrigin.Y, pawn.AbsOrigin.Z + eyeZ);
+
+        var eyeAngles = pawn.EyeAngles;
+        float pitchRad = eyeAngles.X * (MathF.PI / 180f);
+        float yawRad = eyeAngles.Y * (MathF.PI / 180f);
+        float cosPitch = MathF.Cos(pitchRad);
+        float fwdX = cosPitch * MathF.Cos(yawRad);
+        float fwdY = cosPitch * MathF.Sin(yawRad);
+        float fwdZ = -MathF.Sin(pitchRad);
+
+        float minDot = MathF.Cos(aimConeDeg * (MathF.PI / 180f));
+
+        CCSPlayerController? bestTarget = null;
+        float bestDot = -2f;
+        float bestDist = float.MaxValue;
+
+        foreach (var cand in ctx.Services.Sessions.GetAlivePlayers(enemyTeam))
+        {
+            if (!SkillHelpers.IsAlive(cand) || cand.Slot == owner.Slot)
+                continue;
+            if (!ffa && cand.Team == owner.Team)
+                continue;
+
+            var candOrigin = SkillHelpers.CloneOrigin(cand);
+            if (candOrigin == null)
+                continue;
+
+            float dx = candOrigin.X - eye.X;
+            float dy = candOrigin.Y - eye.Y;
+            float dz = (candOrigin.Z + 36f) - eye.Z;
+            float dist = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+            if (dist < 1f || dist > maxDistance)
+                continue;
+
+            float dot = (dx * fwdX + dy * fwdY + dz * fwdZ) / dist;
+            if (dot < minDot)
+                continue;
+
+            if (dot > bestDot + 1e-4f || (MathF.Abs(dot - bestDot) <= 1e-4f && dist < bestDist))
+            {
+                bestDot = dot;
+                bestDist = dist;
+                bestTarget = cand;
+            }
+        }
+
+        if (bestTarget != null && requireLos)
+        {
+            var hit = ctx.Services.Teleport.GetCrosshairPoint(owner, MathF.Min(maxDistance, bestDist + 64f));
+            if (hit != null)
+            {
+                float hdx = hit.X - eye.X;
+                float hdy = hit.Y - eye.Y;
+                float hdz = hit.Z - eye.Z;
+                float hitDist = MathF.Sqrt(hdx * hdx + hdy * hdy + hdz * hdz);
+                if (hitDist + 48f < bestDist)
+                {
+                    bestTarget = null;
+                }
+            }
+        }
+
+        if (bestTarget == null)
+        {
+            ctx.Activated = false;
+            ctx.Services.Effects.PrintChat(owner, "No enemy in your crosshair!");
+            return;
+        }
+
+        var targetOrigin = SkillHelpers.CloneOrigin(bestTarget);
+        if (targetOrigin == null)
+        {
+            ctx.Activated = false;
+            return;
+        }
+
+        var enemies = ctx.Services.Combat.GetPlayersInRadius(targetOrigin, radius, teamFilter: enemyTeam, exclude: owner, aliveOnly: true);
+        int hitCount = 0;
+        foreach (var enemy in enemies)
+        {
+            if (!SkillHelpers.IsAlive(enemy) || enemy.Slot == owner.Slot)
+                continue;
+            if (!ffa && enemy.Team == owner.Team)
+                continue;
+
+            var enemyOrigin = SkillHelpers.CloneOrigin(enemy);
+            if (enemyOrigin == null)
+                continue;
+
+            float dx = enemyOrigin.X - targetOrigin.X;
+            float dy = enemyOrigin.Y - targetOrigin.Y;
+            float dz = enemyOrigin.Z - targetOrigin.Z;
+            float dist = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+            float falloff = MathF.Max(0f, 1f - (dist / radius));
+            float dmg = MathF.Max(minDamage, MathF.Floor(baseDamage * falloff));
+
+            ctx.Services.Combat.DealDamage(enemy, owner, dmg, "molotov", ignoreArmor: false, isSkillDamage: true);
+            hitCount++;
+        }
+
+        string impact1 = action.GetString("impact_particle_1");
+        if (string.IsNullOrWhiteSpace(impact1)) impact1 = DefaultImpactParticle1;
+        string impact2 = action.GetString("impact_particle_2");
+        if (string.IsNullOrWhiteSpace(impact2)) impact2 = DefaultImpactParticle2;
+
+        ctx.Services.Effects.SpawnParticle(new Vector(targetOrigin.X, targetOrigin.Y, targetOrigin.Z + 10f), impact1, 3f);
+        ctx.Services.Effects.SpawnParticle(new Vector(targetOrigin.X, targetOrigin.Y, targetOrigin.Z), impact2, 3f);
+
+        string sound = action.GetString("sound", DefaultSound);
+        if (!string.IsNullOrWhiteSpace(sound))
+        {
+            ctx.Services.Effects.EmitSound(owner, sound, 0.5f);
+        }
+
+        string message = action.GetString("message");
+        if (!string.IsNullOrEmpty(message))
+        {
+            string dmgStr = ((int)Math.Round(baseDamage)).ToString();
+            ctx.Services.Effects.PrintCenter(owner, SkillHelpers.FormatMessage(message, ctx, value: dmgStr, damage: dmgStr, count: hitCount.ToString()));
+        }
+
+        ctx.Activated = true;
+    }
+}

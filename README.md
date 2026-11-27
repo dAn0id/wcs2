@@ -8,8 +8,8 @@ A data-driven **CounterStrikeSharp** (`.NET 10.0`) port of **Warcraft:Source (WC
 
 ## Features
 
-- **11 Standard Races (47 Skills):**
-  - Archmage Proudmoore, Blood Mage, Crypt Lord, Flame Predator, Human Alliance, Night Elves, Orcish Horde, Shadow Hunter, Succubus Hunter, Undead Scourge, Warden
+- **12 Standard Races (51 Skills):**
+  - Archmage Proudmoore, Blood Mage, Crypt Lord, Flame Predator, Human Alliance, Night Elves, Orcish Horde, Pyromancer, Shadow Hunter, Succubus Hunter, Undead Scourge, Warden
 - **4 Shop Items:** Belt of Vitality, Boots of Speed, Gem of Life, Rune of Wisdom
 - **Core WCS Progression:** Per-race XP & levels (`required_xp = 80 * level`), Rested XP (online & offline accumulation), Level Bank (with new-player bonus), Bot random race & ability support, and full `wcsadmin` management
 - **Source 2 Collision Tracing:** Automatic ELF64 RTTI/xref symbol resolution (`configs/gamedata.json` fallback/override) + standing/crouched player-hull validation prevents teleporting or spawning props inside walls, floors, ceilings, or solid props, plus an optional **Dash-style Teleport (`teleport_dash`)** alternative included in teleport race configs
@@ -32,7 +32,7 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
 
 ### 2. Download & Extract Prebuilt Release
 
-1. Download the latest `WCS2-v1.0.7-linux-x64.zip` (or `.tar.gz`) archive from **[GitHub Releases](https://github.com/dAn0id/wcs2/releases)**.
+1. Download the latest `WCS2-v1.0.8-linux-x64.zip` (or `.tar.gz`) archive from **[GitHub Releases](https://github.com/dAn0id/wcs2/releases)**.
 2. Extract it into `game/csgo/addons/counterstrikesharp/plugins/` so the directory layout looks like:
    ```text
    game/csgo/addons/counterstrikesharp/
@@ -71,6 +71,7 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
            │       ├── human_alliance.json
            │       ├── night_elves.json
            │       ├── orcish_horde.json
+           │       ├── pyromancer.json
            │       ├── shadow_hunter.json
            │       ├── succubus_hunter.json
            │       ├── undead_scourge.json
@@ -128,9 +129,9 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
 
 Restart your CS2 server and verify in the server console / RCON:
 - `meta list` -> `CounterStrikeSharp` loaded
-- `css_plugins list` -> `[#1:LOADED]: "WCS2" (1.0.7)`
+- `css_plugins list` -> `[#1:LOADED]: "WCS2" (1.0.8)`
 - Server startup logs confirm:
-  - `[WCS2] Loaded 11 races across 3 categories.`
+  - `[WCS2] Loaded 12 races across 3 categories.`
   - `[WCS2] Loaded 4 shop items.`
   - `[WCS2] SQLite database initialized cleanly.`
   - `[WCS2] Source2TraceEngine initialized cleanly (mode=auto): TraceShape=[dynamic-elf] ..., GTM*=[dynamic-elf] ..., FilterVtable=[dynamic-elf] ...`
@@ -182,12 +183,12 @@ cd game/csgo/addons/counterstrikesharp/plugins/WCS2/configs/races
 ./wcs2-race-builder.py
 ```
 
-- **Guided 3-Step Wizard:** Create a brand-new race or load & edit any existing `*.json` file in `configs/races/` — pick triggers, browse all **40 built-in primitives** and **6 custom handlers**, configure targets, linearly interpolate `level_values` (`Start -> End`), preview live validated JSON, and save directly as `./<race_key>.json`.
+- **Guided 3-Step Wizard:** Create a brand-new race or load & edit any existing `*.json` file in `configs/races/` — pick triggers, browse all **43 built-in primitives** and **6 custom handlers**, configure targets, linearly interpolate `level_values` (`Start -> End`), preview live validated JSON, and save directly as `./<race_key>.json`.
 - **Activate Live:** After saving, run `wcs_reload` in your CS2 server console / RCON to load the new race without restarting.
 - **Useful CLI Options:**
   ```bash
   ./wcs2-race-builder.py --load human_alliance.json   # Open an existing race directly in the TUI
-  ./wcs2-race-builder.py --list-skills                # Print all 40 primitives & 6 custom handlers
+  ./wcs2-race-builder.py --list-skills                # Print all 43 primitives & 6 custom handlers
   ./wcs2-race-builder.py --validate *.json            # Validate one or more race JSON/JSONC files
   ```
 
@@ -338,7 +339,7 @@ Save as `plugins/WCS2/configs/races/frost_assassin.json`:
 - **Message placeholders** (usable in `message`, `center_message`, `attacker_message`, `victim_message`, `target_message`, `text`, etc.):
   `{value}`, `{pct}`, `{amount}`, `{damage}`, `{heal}`, `{duration}`, `{chance}`, `{count}`, `{owner}`, `{attacker}`, `{victim}`.
 
-### 4. Available Skill Primitives (40 Built-In)
+### 4. Available Skill Primitives (43 Built-In)
 
 <details>
 <summary><strong>Health, Defense &amp; Passive Buffs (13 primitives)</strong></summary>
@@ -362,7 +363,7 @@ Save as `plugins/WCS2/configs/races/frost_assassin.json`:
 </details>
 
 <details>
-<summary><strong>Combat, Damage &amp; Economy (10 primitives)</strong></summary>
+<summary><strong>Combat, Damage &amp; Economy (11 primitives)</strong></summary>
 
 | `type` | Description | Key `level_values` / `params` |
 | --- | --- | --- |
@@ -376,11 +377,12 @@ Save as `plugins/WCS2/configs/races/frost_assassin.json`:
 | `random_enemy_drain` | Strikes a random alive non-immune enemy for damage, healing caster + granting armor | `damage`, `heal`, `health_cap` (`225`), `armor`, `armor_cap` (`250`) |
 | `cheat_death` | Prevents a lethal hit on `PlayerVictim`, leaving owner at `survive_hp` + brief invuln | `survive_hp` (`1`), `chance`, `invuln_duration` (`0.35`), `max_per_round` (`1`, `0` = unlimited), `message` |
 | `splash_damage` | Deals `%` of hit damage to nearby enemies around `victim` (excludes primary victim) | `percent` (`35`), `radius` (`200`), `min_damage` (`1`), `max_damage` (`0` = uncapped), `falloff` (`false`), `weapon_hint`, `ring_color` |
+| `aim_explosion` | Detonates a fiery AoE blast beneath the enemy in your crosshair with linear falloff (refunds cooldown if none in crosshair/LOS) | `damage` (`60`), `min_damage` (`10`), `radius` (`220`), `max_distance` (`1500`), `aim_cone_degrees` (`8.0`), `require_los` (`true`), `impact_particle_1`, `impact_particle_2`, `sound`, `message` |
 
 </details>
 
 <details>
-<summary><strong>Control, Teleport &amp; Respawn (9 primitives)</strong></summary>
+<summary><strong>Control, Teleport &amp; Respawn (10 primitives)</strong></summary>
 
 | `type` | Description | Key `level_values` / `params` |
 | --- | --- | --- |
@@ -391,13 +393,14 @@ Save as `plugins/WCS2/configs/races/frost_assassin.json`:
 | `fade` | Sends a CS2 `Fade` screen tint + optional shake (disorient/banish effect) | `r`, `g`, `b`, `a` (or `color: [r,g,b,a]`), `duration`, `hold_ratio` (`0.7`), `shake_amplitude`, `shake_frequency`, `attacker_message`, `victim_message` |
 | `teleport` | Safe hull-traced crosshair teleport (or velocity push mode); refunds cooldown if blocked | `range` (`1200`), `mode` (`"safe"` \| `"push"`), `push_factor` (`1.8`), `sound` |
 | `teleport_dash` | Dash-style velocity launch along aim angles with sound + electric/distort particles | `force` (`200–2500`, default `1000`), `z_boost` (`150`), `sound` (`"UIPanorama.equip_musicKit"`), `sound_volume` (`0.5`), `particle_count` (`2`), `glow_particle`, `glow_duration` (`3.0`), `distort_particle`, `distort_duration` (`2.0`) |
+| `air_dash` | Passive midair double-jump directional dash (WASD + Jump in air after jumping off ground) | `force` (`200–2500`, default `800`), `cooldown` (`4.0`), `min_z` (`0.275`), `air_delay` (`0.12`), `duration` (`0` = full round), `sound` (`"Default.WalkJump"`), `sound_volume` (`0.5`), `message` |
 | `respawn` | Delayed self-respawn on `PlayerDeath` with countdown (guarded against round end) | `delay` (`3.0`), `at_death_origin` (`true`), `restore_weapons` (`false`), `countdown` (`true`), `ring_color` |
 | `revive_teammate` | Revives 1+ random dead teammates at team spawn or caster (refunds cooldown if none dead) | `count` (`1`), `at_caster` (`false`), `health` (`0` = default 100 HP) |
 
 </details>
 
 <details>
-<summary><strong>Weapons &amp; Visual/Audio Effects (8 primitives)</strong></summary>
+<summary><strong>Weapons &amp; Visual/Audio Effects (9 primitives)</strong></summary>
 
 | `type` | Description | Key `level_values` / `params` |
 | --- | --- | --- |
@@ -405,6 +408,7 @@ Save as `plugins/WCS2/configs/races/frost_assassin.json`:
 | `drop_weapon` | Forces target to drop their primary (or active) weapon | `primary_only` (`true`), `attacker_message`, `victim_message` |
 | `set_clip_ammo` | Overrides active/matching weapon magazine clip and/or reserve ammo | `weapon` (e.g. `"weapon_p250"` or `"secondary"`), `clip`, `reserve` |
 | `instant_restock` | Grants/restocks a weapon on a repeating interval (or one-shot if `interval <= 0`) for self or teammates | `weapon` (`"weapon_hegrenade"`), `interval` (`10`, `<=0` = one-shot), `duration` (`0` = full round), `only_if_missing` (`true`), `immediate` (`true`), `max_grants` (`0` = unlimited), `radius` (`300`, for `nearby_teammates`), `message` |
+| `explosive_molotov` | Turns thrown Molotov/Incendiary grenades into high-speed exploding Fireballs with linear AoE falloff & fire trail/impact particles | `damage` (`80`), `radius` (`250`), `speed` (`1800`, `0` = normal grenade arc), `duration` (`0` = full round), `min_damage` (`5`), `include_incendiary` (`true`), `fireball_visuals` (`true`), `message` |
 | `beam` | Draws a colored `CBeam` line between two players | `from` (`"attacker"`), `to` (`"victim"`), `r`, `g`, `b` (or `color`), `width`, `duration`, `z_offset` |
 | `beam_ring` | Draws one or more stacked `CBeam` rings around a player | `radius`, `r`, `g`, `b` (or `color`), `width`, `duration`, `z_offset`, `count` (`1–6`), `z_step` |
 | `sound` | Plays a CS2 sound event for a player or all players (`target: "all"`) | `sound_event` |
@@ -453,4 +457,4 @@ Publishing with `-r linux-x64 --no-self-contained` is required so `Microsoft.Dat
 - `src/WCS2/Services/` — Combat/damage hooks, weapons/restrictions, visual/audio effects, ELF64 symbol resolver, Source 2 collision tracer & teleportation
 - `src/WCS2/Skills/` — Skill execution engine, composable `Primitives/`, and `CustomHandlers/`
 - `src/WCS2/Menus/` — `CS2MenuManager` menu flows
-- `src/WCS2/configs/` — Default server config, gamedata, 4 shop items, and 11 standard race definitions
+- `src/WCS2/configs/` — Default server config, gamedata, 4 shop items, and 12 standard race definitions

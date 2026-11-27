@@ -509,8 +509,29 @@ PRIMITIVES_LIST: list[PrimitiveSpec] = [
             FieldSpec("ring_color", "color", [255, 140, 40], "RGB", "Optional impact ring RGB"),
         ),
     ),
+    PrimitiveSpec(
+        key="aim_explosion",
+        category="Combat, Damage & Economy",
+        summary="Detonates an AoE blast beneath the enemy in your crosshair (LOS + cone)",
+        default_target="self",
+        recommended_triggers=("PlayerUltimate", "PlayerAbility"),
+        level_specs=(
+            FieldSpec("damage", "float", 60.0, "dmg", "Base explosion damage at center", suggested_start=35, suggested_end=70),
+            FieldSpec("radius", "float", 220.0, "u", "Explosion AoE radius", suggested_start=160, suggested_end=300),
+            FieldSpec("max_distance", "float", 1500.0, "u", "Max crosshair lock-on range"),
+        ),
+        param_specs=(
+            FieldSpec("min_damage", "float", 10.0, "dmg", "Minimum falloff damage floor"),
+            FieldSpec("aim_cone_degrees", "float", 8.0, "deg", "Crosshair lock-on cone half-angle"),
+            FieldSpec("require_los", "bool", True, "", "Require clear line-of-sight to target"),
+            FieldSpec("impact_particle_1", "str", "particles/survival_fx/gas_cannister_impact.vpcf", "", "Primary impact particle .vpcf"),
+            FieldSpec("impact_particle_2", "str", "particles/ui/ui_electric_exp_glow.vpcf", "", "Secondary impact particle .vpcf"),
+            FieldSpec("sound", "str", "UIPanorama.equip_musicKit", "", "Sound event emitted on blast"),
+            FieldSpec("message", "str", "", "", "Optional center message ({damage}, {count})"),
+        ),
+    ),
 
-    # --- Control, Teleport & Respawn (9) ---
+    # --- Control, Teleport & Respawn (10) ---
     PrimitiveSpec(
         key="freeze",
         category="Control, Teleport & Respawn",
@@ -632,6 +653,25 @@ PRIMITIVES_LIST: list[PrimitiveSpec] = [
         ),
     ),
     PrimitiveSpec(
+        key="air_dash",
+        category="Control, Teleport & Respawn",
+        summary="Passive midair double-jump directional dash (WASD + Jump in air)",
+        default_target="self",
+        recommended_triggers=("PlayerSpawn", "PlayerUltimate", "PlayerAbility"),
+        level_specs=(
+            FieldSpec("force", "float", 800.0, "u/s", "Dash velocity impulse (200-2500)", suggested_start=600, suggested_end=1100),
+            FieldSpec("cooldown", "float", 4.0, "s", "Per-dash cooldown in seconds (0-60)", suggested_start=6.0, suggested_end=2.5),
+            FieldSpec("duration", "float", 0.0, "s", "Active duration (0 = full round)"),
+        ),
+        param_specs=(
+            FieldSpec("min_z", "float", 0.275, "0-1", "Minimum upward Z direction component"),
+            FieldSpec("air_delay", "float", 0.12, "s", "Delay in air before Jump triggers dash"),
+            FieldSpec("sound", "str", "Default.WalkJump", "", "CS2 sound event played on dash"),
+            FieldSpec("sound_volume", "float", 0.5, "0-1", "Sound volume (0.05-1.0)"),
+            FieldSpec("message", "str", "", "", "Optional chat message on dash"),
+        ),
+    ),
+    PrimitiveSpec(
         key="respawn",
         category="Control, Teleport & Respawn",
         summary="Delayed self-respawn on death with countdown (round-guarded)",
@@ -722,6 +762,25 @@ PRIMITIVES_LIST: list[PrimitiveSpec] = [
             FieldSpec("only_if_missing", "bool", True, "", "Only give if target doesn't already carry the weapon"),
             FieldSpec("immediate", "bool", True, "", "Grant immediately on trigger in addition to interval ticks"),
             FieldSpec("message", "str", "", "", "Optional chat message ({value} = weapon)"),
+        ),
+    ),
+    PrimitiveSpec(
+        key="explosive_molotov",
+        category="Weapons & Effects",
+        summary="Turns thrown Molotov/Incendiary into a high-speed exploding Fireball",
+        default_target="self",
+        recommended_triggers=("PlayerSpawn", "PlayerUltimate", "PlayerAbility"),
+        level_specs=(
+            FieldSpec("damage", "float", 80.0, "dmg", "Base AoE explosion damage at center", suggested_start=50, suggested_end=110),
+            FieldSpec("radius", "float", 250.0, "u", "Explosion AoE radius", suggested_start=180, suggested_end=300),
+            FieldSpec("speed", "float", 1800.0, "u/s", "Fireball launch speed (0 = keep normal grenade arc)"),
+            FieldSpec("duration", "float", 0.0, "s", "0 = until death/round end, >0 = timed"),
+        ),
+        param_specs=(
+            FieldSpec("min_damage", "float", 5.0, "dmg", "Minimum falloff damage floor"),
+            FieldSpec("include_incendiary", "bool", True, "", "Also convert CT incendiary grenades"),
+            FieldSpec("fireball_visuals", "bool", True, "", "Orange fireball model + fire trail particle"),
+            FieldSpec("message", "str", "", "", "Optional chat message ({damage}, {duration})"),
         ),
     ),
     PrimitiveSpec(
@@ -3161,10 +3220,10 @@ def cmd_validate(paths: list[str]) -> int:
 
 def cmd_self_test() -> int:
     # 1. Exact catalog counts matching WCS2 SkillExecutionEngine.cs
-    assert len(PRIMITIVES) == 40, f"Expected 40 primitives, got {len(PRIMITIVES)}"
+    assert len(PRIMITIVES) == 43, f"Expected 43 primitives, got {len(PRIMITIVES)}"
     assert len(CUSTOM_HANDLERS) == 6, f"Expected 6 custom handlers, got {len(CUSTOM_HANDLERS)}"
     assert "teleport" in PRIMITIVES and "teleport_dash" in PRIMITIVES
-    for k in ("cheat_death", "splash_damage", "revive_teammate", "player_scale", "infinite_ammo", "instant_restock"):
+    for k in ("cheat_death", "splash_damage", "revive_teammate", "player_scale", "infinite_ammo", "instant_restock", "explosive_molotov", "aim_explosion", "air_dash"):
         assert k in PRIMITIVES, f"Missing new primitive: {k}"
     assert "nearby_teammates" in VALID_TARGET_KEYS and "all_teammates" in VALID_TARGET_KEYS
     assert len(RACE_TRIGGERS) == 9
