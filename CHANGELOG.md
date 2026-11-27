@@ -4,6 +4,16 @@ All notable changes to **WCS2** are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.9] - 2026-11-27 — Moving Aura Primitive & HTML Race Editor
+
+### Added
+- **New `aura` Skill Primitive (44 Built-In Total):** Moving player-centered aura supporting `burn`, `poison`, `freeze`, `heal`, and `slow` effects with configurable `self`/`team`/`enemy` targeting, per-level `radius`/`chance`/`value`/`interval`, a 3-second ground ripple particle (`particles/explosions_fx/explosion_hegrenade_water_ripple.vpcf`), and per-source `PlayerStateManager.SpeedMultipliers` so each player's exact personal speed is restored when exiting or when a slow aura expires.
+- **Offline Single-File HTML Race Editor (`configs/races/wcs2-race-builder.html`):** Zero-dependency English browser editor bundled in `configs/races/` featuring automatic REQUIRED/OPTIONAL parameters and mouseover overlays for all 44 primitives and 6 custom handlers, `Apply Recommended Skill Preset`, `Generate Random Race`, per-skill `Randomize Skill`, `+ Add Random Skill`, JSONC file import, live JSON preview, and schema validation.
+
+### Changed
+- **Auto-Updating Bundled Tooling:** `RaceRegistry.EnsureConfigsSeeded` now auto-updates both `.html` (`0644`) and `.py` (`0755`) race editor files on byte diff while keeping all customized `.json` configs untouched.
+- **Legacy TUI Designation:** Marked `configs/races/wcs2-race-builder.py` as the Legacy terminal race builder in `README.md` alongside the new HTML editor.
+
 ## [1.0.8] - 2026-11-27 — Pyromancer Race & 3 New Skill Primitives
 
 ### Added
@@ -83,6 +93,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Dash-Style Teleport Alternative:** Added the `teleport_dash` primitive (velocity launch + sound + electric/distort particles) and included a commented-out alternative in `human_alliance.json` using JSONC comment support.
 - **Automated Linux x64 Releases:** Added `.github/workflows/release.yml` to build, verify, and publish `.zip`, `.tar.gz`, and `SHA256SUMS.txt` artifacts on `v*` tags.
 
+[1.0.9]: https://github.com/dAn0id/wcs2/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/dAn0id/wcs2/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/dAn0id/wcs2/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/dAn0id/wcs2/compare/v1.0.5...v1.0.6

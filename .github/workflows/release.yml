@@ -64,6 +64,7 @@ jobs:
           test -f stage/WCS2/defaults/configs/wcs.json
           test -f stage/WCS2/defaults/configs/gamedata.json
           test -f stage/WCS2/defaults/configs/items.json
+          test -f stage/WCS2/defaults/configs/races/wcs2-race-builder.html
           test -f stage/WCS2/defaults/configs/races/wcs2-race-builder.py
           chmod +x stage/WCS2/defaults/configs/races/wcs2-race-builder.py
           test -x stage/WCS2/defaults/configs/races/wcs2-race-builder.py

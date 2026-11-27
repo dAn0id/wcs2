@@ -13,7 +13,7 @@ A data-driven **CounterStrikeSharp** (`.NET 10.0`) port of **Warcraft:Source (WC
 - **4 Shop Items:** Belt of Vitality, Boots of Speed, Gem of Life, Rune of Wisdom
 - **Core WCS Progression:** Per-race XP & levels (`required_xp = 80 * level`), Rested XP (online & offline accumulation), Level Bank (with new-player bonus), Bot random race & ability support, and full `wcsadmin` management
 - **Source 2 Collision Tracing:** Automatic ELF64 RTTI/xref symbol resolution (`configs/gamedata.json` fallback/override) + standing/crouched player-hull validation prevents teleporting or spawning props inside walls, floors, ceilings, or solid props, plus an optional **Dash-style Teleport (`teleport_dash`)** alternative included in teleport race configs
-- **Data-Driven Engine:** JSONC (comments & trailing commas supported) race & item configs (`configs/`) powered by composable skill primitives, bespoke custom handlers, and a bundled interactive terminal **Race Builder TUI** (`configs/races/wcs2-race-builder.py`)
+- **Data-Driven Engine:** JSONC (comments & trailing commas supported) race & item configs (`configs/`) powered by composable skill primitives, bespoke custom handlers, and a bundled single-file offline **Visual HTML Race Editor** (`configs/races/wcs2-race-builder.html`) plus legacy CLI/TUI validator (`configs/races/wcs2-race-builder.py`)
 - **Embedded SQLite Persistence:** Async WAL-mode SQLite database (`Microsoft.Data.Sqlite` + `Dapper`) auto-initialized on first boot
 - **Interactive Menus:** Built on `CS2MenuManager` (`WasdMenu`, `CenterHtmlMenu`, `ChatMenu`, `ConsoleMenu`)
 
@@ -32,7 +32,7 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
 
 ### 2. Download & Extract Prebuilt Release
 
-1. Download the latest `WCS2-v1.0.8-linux-x64.zip` (or `.tar.gz`) archive from **[GitHub Releases](https://github.com/dAn0id/wcs2/releases)**.
+1. Download the latest `WCS2-v1.0.9-linux-x64.zip` (or `.tar.gz`) archive from **[GitHub Releases](https://github.com/dAn0id/wcs2/releases)**.
 2. Extract it into `game/csgo/addons/counterstrikesharp/plugins/` so the directory layout looks like:
    ```text
    game/csgo/addons/counterstrikesharp/
@@ -58,6 +58,7 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
            │       ├── items.json
            │       └── races/
            │           ├── *.json
+           │           ├── wcs2-race-builder.html
            │           └── wcs2-race-builder.py
            ├── configs/                   # Auto-seeded from defaults/configs/ on first boot
            │   ├── wcs.json
@@ -76,13 +77,14 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
            │       ├── succubus_hunter.json
            │       ├── undead_scourge.json
            │       ├── warden.json
-           │       └── wcs2-race-builder.py   # Interactive TUI race builder & validator
+           │       ├── wcs2-race-builder.html # Visual offline HTML race editor
+           │       └── wcs2-race-builder.py   # Legacy CLI/TUI race builder & validator
            └── data/                      # Auto-created on first boot
                └── wcs2.sqlite            # Fresh WAL-mode SQLite DB
    ```
 3. Ensure all files are owned by the Linux user running your CS2 server (e.g. `chown -R <server-user>:<server-user> plugins/WCS2`).
 
-> **Safe Updating:** Release archives ship default config templates under `defaults/configs/` and never include a `configs/` folder. On startup (and `wcs_reload`), `WCS2` copies only *missing* `.json` config files from `defaults/configs/` into `configs/` — so extracting a new release archive directly over `plugins/WCS2/` safely preserves all customized `wcs.json`, `gamedata.json`, `items.json`, `races/*.json`, and `data/wcs2.sqlite` files, while bundled `.py` tooling (`wcs2-race-builder.py`) automatically stays up to date.
+> **Safe Updating:** Release archives ship default config templates under `defaults/configs/` and never include a `configs/` folder. On startup (and `wcs_reload`), `WCS2` copies only *missing* `.json` config files from `defaults/configs/` into `configs/` — so extracting a new release archive directly over `plugins/WCS2/` safely preserves all customized `wcs.json`, `gamedata.json`, `items.json`, `races/*.json`, and `data/wcs2.sqlite` files, while bundled `.html` and `.py` tooling (`wcs2-race-builder.html`, `wcs2-race-builder.py`) automatically stays up to date.
 
 ### 3. Configure Admins
 
@@ -129,7 +131,7 @@ For server administrators deploying `WCS2` on a **CS2 Linux x64** dedicated serv
 
 Restart your CS2 server and verify in the server console / RCON:
 - `meta list` -> `CounterStrikeSharp` loaded
-- `css_plugins list` -> `[#1:LOADED]: "WCS2" (1.0.8)`
+- `css_plugins list` -> `[#1:LOADED]: "WCS2" (1.0.9)`
 - Server startup logs confirm:
   - `[WCS2] Loaded 12 races across 3 categories.`
   - `[WCS2] Loaded 4 shop items.`
@@ -172,25 +174,28 @@ bind c ability
 
 ## Creating Custom Races
 
-`WCS2` is fully data-driven: server admins can create new races (or edit existing ones) purely in JSON without writing C# or recompiling — either with the bundled **interactive TUI Race Builder** or by editing JSON directly.
+`WCS2` is fully data-driven: server admins can create new races (or edit existing ones) purely in JSON without writing C# or recompiling — either with the bundled **Visual HTML Race Editor** (`wcs2-race-builder.html`), the legacy CLI/TUI tool (`wcs2-race-builder.py`), or by editing JSON directly.
 
-### Interactive TUI Race Builder (`wcs2-race-builder.py`)
+### Visual HTML Race Editor (`wcs2-race-builder.html`) *(Recommended)*
 
-`WCS2` ships a zero-dependency Python 3 (`curses`) interactive wizard directly inside `configs/races/` for creating, editing, and validating custom races over SSH or a local terminal:
+`WCS2` ships a zero-dependency, single-file offline HTML race editor directly inside `configs/races/wcs2-race-builder.html` (open it locally via `file://` in any modern browser — no web server or internet connection required):
+
+- **Automatic Required & Optional Parameters + Presets:** Selecting any of the **44 built-in primitives** or **6 custom handlers** automatically displays its `REQUIRED` and `OPTIONAL` parameters with typed inputs (dropdowns, toggles, color pickers, CS2 weapon chips), a 1-click **`Apply Recommended Skill Preset`** button, a `Start -> End` linear interpolation helper, and individual per-level inputs.
+- **1-Click Random Race Generator:** Click **`Generate Random Race`** to instantly create a complete, balanced, schema-valid 4-skill race (Spawn Passive, Attacker Proc, Defensive/Death, Ultimate) ready to tweak or export.
+- **Interactive Mouseover Tooltips:** Hovering over any primitive, custom handler, trigger, target, or parameter displays a floating English tooltip explaining its behavior, type, default, and when to use it.
+- **JSONC Import & Live Preview:** Drag-and-drop or import any existing `.json` / `.jsonc` race (comments and trailing commas are stripped automatically), inspect the live syntax-highlighted JSON preview with real-time schema validation, copy or download `<race_key>.json` into `configs/races/`, and run `wcs_reload` to activate live without restarting.
+
+### Legacy Terminal Race Builder & CLI Validator (`wcs2-race-builder.py`)
+
+For headless SSH sessions or CI validation, `WCS2` also keeps the legacy zero-dependency Python 3 (`curses`) TUI & CLI tool in `configs/races/wcs2-race-builder.py`:
 
 ```bash
 cd game/csgo/addons/counterstrikesharp/plugins/WCS2/configs/races
-./wcs2-race-builder.py
+./wcs2-race-builder.py                              # Legacy interactive TUI wizard
+./wcs2-race-builder.py --load human_alliance.json   # Open an existing race directly in the TUI
+./wcs2-race-builder.py --list-skills                # Print all 44 primitives & 6 custom handlers
+./wcs2-race-builder.py --validate *.json            # Validate one or more race JSON/JSONC files
 ```
-
-- **Guided 3-Step Wizard:** Create a brand-new race or load & edit any existing `*.json` file in `configs/races/` — pick triggers, browse all **43 built-in primitives** and **6 custom handlers**, configure targets, linearly interpolate `level_values` (`Start -> End`), preview live validated JSON, and save directly as `./<race_key>.json`.
-- **Activate Live:** After saving, run `wcs_reload` in your CS2 server console / RCON to load the new race without restarting.
-- **Useful CLI Options:**
-  ```bash
-  ./wcs2-race-builder.py --load human_alliance.json   # Open an existing race directly in the TUI
-  ./wcs2-race-builder.py --list-skills                # Print all 43 primitives & 6 custom handlers
-  ./wcs2-race-builder.py --validate *.json            # Validate one or more race JSON/JSONC files
-  ```
 
 ### 1. Where to Add Custom Races & Hot-Reload
 
@@ -333,21 +338,22 @@ Save as `plugins/WCS2/configs/races/frost_assassin.json`:
 | `PlayerBuy` | Shop item instant purchase (`items.json`) |
 
 - **Valid `target` selectors:**
-  - Single-target: `"self"` (or `"owner"`), `"victim"`, `"attacker"`, `"enemy"` (resolves to the opposite player in combat).
-  - Team / AoE: `"nearby_enemies"` (for `aoe_damage`, `aoe_freeze`), `"nearby_teammates"` (alive teammates within `radius`, excluding self), `"all_teammates"` (all alive teammates, excluding self).
+  - Single-target: `"self"` (or `"owner"`), `"victim"`, `"attacker"`, `"enemy"` (resolves to the opposite player in combat, or nearby enemies in `aura`).
+  - Team / AoE: `"team"` (alive teammates within `radius`, plus self when `include_self` is `true`, for `aura`), `"nearby_enemies"` (for `aoe_damage`, `aoe_freeze`), `"nearby_teammates"` (alive teammates within `radius`, excluding self), `"all_teammates"` (all alive teammates, excluding self).
   - Audio (`sound`): `"self"`, `"victim"`, `"attacker"`, or `"all"` (every connected human player).
 - **Message placeholders** (usable in `message`, `center_message`, `attacker_message`, `victim_message`, `target_message`, `text`, etc.):
   `{value}`, `{pct}`, `{amount}`, `{damage}`, `{heal}`, `{duration}`, `{chance}`, `{count}`, `{owner}`, `{attacker}`, `{victim}`.
 
-### 4. Available Skill Primitives (43 Built-In)
+### 4. Available Skill Primitives (44 Built-In)
 
 <details>
-<summary><strong>Health, Defense &amp; Passive Buffs (13 primitives)</strong></summary>
+<summary><strong>Health, Defense &amp; Passive Buffs (14 primitives)</strong></summary>
 
 | `type` | Description | Key `level_values` / `params` |
 | --- | --- | --- |
 | `health` | Add or set HP (supports penalties via negative `amount`) | `amount`, `mode` (`"add"` \| `"set"`), `max_cap` (`0` = none), `min_hp` (`1`), `update_max_health` (`true`), `message` |
 | `regen` | Periodic self or team-aura health regeneration | `amount` or `min_heal` + `max_heal`, `interval` or `min_interval` + `max_interval`, `max_cap` (`0` = capture current HP on start), `radius` (`0` = self only, `>0` = self + allies), `tag` |
+| `aura` | Moving player-centered aura (`burn`, `poison`, `freeze`, `heal`, or `slow` with exact personal-speed restore) targeting `self`, `team`, or `enemy` with periodic ground ripple FX | `effect` (`"burn"` \| `"poison"` \| `"freeze"` \| `"heal"` \| `"slow"`), `radius` (`220`), `value` (or `damage`/`amount`/`freeze_duration`/`slow_factor`), `chance` (`100`), `interval` (`1.0`), `duration` (`0` = full round), `include_self` (`true`), `overheal` (`false`), `particle`, `particle_interval` (`3.0`), `particle_duration` (`2.5`), `message` |
 | `evasion` | Passive (round) or timed dodge chance (`0–100%`) | `chance`, `duration` (`0` = full round), `warn_before_end`, `message`, `center_message`, `fading_message`, `ended_message` |
 | `damage_absorb` | Passive incoming damage reduction (`0.0–0.95`) + optional mirror damage | `absorb`, `mirror_min`, `mirror_max`, `message` |
 | `ultimate_immunity` | Grants immunity to enemy ultimates for the round | `message` |

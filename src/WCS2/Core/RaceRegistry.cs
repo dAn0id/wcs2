@@ -32,7 +32,7 @@ public sealed class RaceRegistry
     /// <summary>
     /// Copies missing default config files from defaults/configs/ into configs/ without
     /// ever overwriting existing admin-customized .json/config files, while automatically
-    /// keeping bundled .py helper scripts (e.g. wcs2-race-builder.py) up to date.
+    /// keeping bundled .html/.py tooling (e.g. wcs2-race-builder.html, wcs2-race-builder.py) up to date.
     /// </summary>
     public void EnsureConfigsSeeded(string moduleDirectory)
     {
@@ -42,7 +42,7 @@ public sealed class RaceRegistry
 
         string targetDir = Path.Combine(moduleDirectory, "configs");
         int seeded = 0;
-        int updatedScripts = 0;
+        int updatedTools = 0;
 
         try
         {
@@ -51,11 +51,13 @@ public sealed class RaceRegistry
                 string relPath = Path.GetRelativePath(defaultsDir, srcPath);
                 string destPath = Path.Combine(targetDir, relPath);
                 bool isPythonScript = destPath.EndsWith(".py", StringComparison.OrdinalIgnoreCase);
+                bool isHtmlTool = destPath.EndsWith(".html", StringComparison.OrdinalIgnoreCase);
+                bool isBundledTool = isPythonScript || isHtmlTool;
                 bool exists = File.Exists(destPath);
 
                 if (exists)
                 {
-                    if (!isPythonScript)
+                    if (!isBundledTool)
                         continue;
 
                     if (File.ReadAllBytes(srcPath).AsSpan().SequenceEqual(File.ReadAllBytes(destPath)))
@@ -67,17 +69,28 @@ public sealed class RaceRegistry
                     Directory.CreateDirectory(destParent);
 
                 File.Copy(srcPath, destPath, overwrite: exists);
-                if (OperatingSystem.IsLinux() && isPythonScript)
+                if (OperatingSystem.IsLinux())
                 {
-                    File.SetUnixFileMode(
-                        destPath,
-                        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
-                        UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
-                        UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+                    if (isPythonScript)
+                    {
+                        File.SetUnixFileMode(
+                            destPath,
+                            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                            UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+                    }
+                    else if (isHtmlTool)
+                    {
+                        File.SetUnixFileMode(
+                            destPath,
+                            UnixFileMode.UserRead | UnixFileMode.UserWrite |
+                            UnixFileMode.GroupRead |
+                            UnixFileMode.OtherRead);
+                    }
                 }
 
                 if (exists)
-                    updatedScripts++;
+                    updatedTools++;
                 else
                     seeded++;
             }
@@ -87,9 +100,9 @@ public sealed class RaceRegistry
                 _logger.LogInformation("[WCS2] Seeded {Count} missing default config file(s) into configs/.", seeded);
             }
 
-            if (updatedScripts > 0)
+            if (updatedTools > 0)
             {
-                _logger.LogInformation("[WCS2] Updated {Count} bundled tool script(s) in configs/.", updatedScripts);
+                _logger.LogInformation("[WCS2] Updated {Count} bundled tool file(s) in configs/.", updatedTools);
             }
         }
         catch (Exception ex)

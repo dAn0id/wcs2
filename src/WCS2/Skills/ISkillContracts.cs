@@ -175,6 +175,8 @@ public interface IPlayerStateManager
     void SetHealth(CCSPlayerController player, int value, bool add = false, bool updateMaxHealth = true);
     void SetArmor(CCSPlayerController player, int value, bool add = false, bool giveHelmet = false);
     void SetSpeed(CCSPlayerController player, float value, bool additive = false, float duration = 0f, string? source = null);
+    void SetSpeedMultiplier(CCSPlayerController player, string source, float multiplier, float duration = 0f);
+    void ClearSpeedMultiplier(CCSPlayerController player, string source);
     void SetGravity(CCSPlayerController player, float scale, float duration = 0f, string? source = null);
     void SetLongjump(CCSPlayerController player, float multiplier, bool additive = false);
     void SetInvisibility(CCSPlayerController player, int alpha, int r = 255, int g = 255, int b = 255, float duration = 0f);

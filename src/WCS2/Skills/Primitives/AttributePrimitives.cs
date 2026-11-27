@@ -1,4 +1,5 @@
 using System.Drawing;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Utils;
 using WCS2.Config;
@@ -512,6 +513,398 @@ public sealed class InfiniteAmmoPrimitive : ISkillPrimitive
             string chanceStr = ((int)Math.Round(chance)).ToString();
             string durStr = duration.ToString("0.#");
             ctx.Services.Effects.PrintChat(target!, SkillHelpers.FormatMessage(msg, ctx, value: chanceStr, chance: chanceStr, duration: durStr));
+        }
+    }
+}
+
+public sealed class AuraPrimitive : ISkillPrimitive
+{
+    public const string DefaultParticle = "particles/explosions_fx/explosion_hegrenade_water_ripple.vpcf";
+
+    private readonly RoundTracker _roundTracker;
+
+    internal AuraPrimitive(RoundTracker roundTracker)
+    {
+        _roundTracker = roundTracker;
+    }
+
+    public string Type => "aura";
+
+    public void Execute(SkillContext ctx, SkillActionConfig action)
+    {
+        var caster = ctx.Owner;
+        if (!SkillHelpers.IsAlive(caster))
+        {
+            ctx.Activated = false;
+            return;
+        }
+
+        string effect = action.GetString("effect", "burn").Trim().ToLowerInvariant();
+        if (effect is not ("burn" or "poison" or "freeze" or "heal" or "slow"))
+            effect = "burn";
+
+        string targetMode = string.IsNullOrWhiteSpace(action.Target)
+            ? "enemy"
+            : action.Target.Trim().ToLowerInvariant();
+
+        float radius = Math.Clamp(action.GetLevelFloat("radius", ctx.SkillLevel, 220f), 32f, 1500f);
+        float value = ResolveEffectValue(action, ctx.SkillLevel, effect);
+        float chance = Math.Clamp(action.GetLevelFloat("chance", ctx.SkillLevel, 100f), 0f, 100f);
+        float interval = MathF.Max(0.25f, action.GetLevelFloat("interval", ctx.SkillLevel, 1.0f));
+        float duration = MathF.Max(0f, action.GetLevelFloat("duration", ctx.SkillLevel, 0f));
+        bool overheal = action.GetBool("overheal", false);
+        bool includeSelf = action.GetBool("include_self", true);
+
+        string particle = action.GetString("particle", DefaultParticle);
+        float particleInterval = action.GetLevelFloat("particle_interval", ctx.SkillLevel, 3.0f);
+        float particleDuration = Math.Clamp(action.GetLevelFloat("particle_duration", ctx.SkillLevel, 2.5f), 0.2f, 15f);
+
+        var services = ctx.Services;
+        string skillKey = ctx.Skill?.Key ?? "item";
+        string effectTag = $"aura_{skillKey}_{effect}";
+        string fxTag = $"aura_fx_{skillKey}_{effect}";
+        string slowSourceKey = $"aura_slow_{caster.Slot}_{skillKey}";
+        string slowSlotsDataKey = $"aura_slow_slots_{skillKey}";
+        int capturedRound = _roundTracker.CurrentRoundId;
+
+        services.State.CancelPlayerTimers(caster, effectTag);
+        services.State.CancelPlayerTimers(caster, fxTag);
+
+        // If re-activating a slow aura before the previous instance ended, immediately restore any previously slowed players
+        if (effect == "slow")
+        {
+            var priorSlots = services.State.GetCustomData<HashSet<int>>(caster, slowSlotsDataKey);
+            if (priorSlots != null && priorSlots.Count > 0)
+            {
+                foreach (int oldSlot in priorSlots)
+                {
+                    var oldPlayer = Utilities.GetPlayerFromSlot(oldSlot);
+                    if (oldPlayer != null && oldPlayer.IsValid)
+                        services.State.ClearSpeedMultiplier(oldPlayer, slowSourceKey);
+                }
+                priorSlots.Clear();
+            }
+        }
+
+        string msg = action.GetString("message");
+        if (!string.IsNullOrEmpty(msg))
+        {
+            string valStr = value.ToString("0.##");
+            string chanceStr = ((int)Math.Round(chance)).ToString();
+            string durStr = duration.ToString("0.#");
+            services.Effects.PrintChat(
+                caster,
+                SkillHelpers.FormatMessage(msg, ctx, value: valStr, amount: valStr, damage: valStr, chance: chanceStr, duration: durStr));
+        }
+
+        // Visual ground ripple timer (independent of gameplay pulse interval)
+        if (!string.IsNullOrWhiteSpace(particle) && particleInterval > 0f)
+        {
+            var initialOrigin = SkillHelpers.CloneOrigin(caster);
+            if (initialOrigin != null)
+            {
+                services.Effects.SpawnParticle(initialOrigin, particle, particleDuration);
+            }
+
+            float safeFxInterval = MathF.Max(0.25f, particleInterval);
+            float fxElapsed = 0f;
+            bool fxStopped = false;
+
+            services.State.SchedulePlayerTimer(caster, safeFxInterval, () =>
+            {
+                if (fxStopped)
+                    return;
+
+                fxElapsed += safeFxInterval;
+                if (capturedRound != _roundTracker.CurrentRoundId
+                    || !_roundTracker.IsRoundActive
+                    || !SkillHelpers.IsAlive(caster))
+                {
+                    fxStopped = true;
+                    if (SkillHelpers.IsValidPlayer(caster))
+                        services.State.CancelPlayerTimers(caster, fxTag);
+                    return;
+                }
+
+                if (duration > 0f && fxElapsed > duration + 0.01f)
+                {
+                    fxStopped = true;
+                    services.State.CancelPlayerTimers(caster, fxTag);
+                    return;
+                }
+
+                var liveOrigin = SkillHelpers.CloneOrigin(caster);
+                if (liveOrigin != null)
+                {
+                    services.Effects.SpawnParticle(liveOrigin, particle, particleDuration);
+                }
+
+                if (duration > 0f && fxElapsed >= duration)
+                {
+                    fxStopped = true;
+                    services.State.CancelPlayerTimers(caster, fxTag);
+                }
+            }, repeat: true, tag: fxTag);
+        }
+
+        // Gameplay effect pulse timer
+        float elapsed = 0f;
+        bool stopped = false;
+        var currentlySlowedSlots = new HashSet<int>();
+        if (effect == "slow")
+            services.State.SetCustomData(caster, slowSlotsDataKey, currentlySlowedSlots);
+
+        void ClearAllSlowed()
+        {
+            if (currentlySlowedSlots.Count == 0)
+                return;
+
+            foreach (int slowedSlot in currentlySlowedSlots)
+            {
+                var p = Utilities.GetPlayerFromSlot(slowedSlot);
+                if (p != null && p.IsValid)
+                    services.State.ClearSpeedMultiplier(p, slowSourceKey);
+            }
+            currentlySlowedSlots.Clear();
+        }
+
+        services.State.SchedulePlayerTimer(caster, interval, () =>
+        {
+            if (stopped)
+                return;
+
+            elapsed += interval;
+            if (capturedRound != _roundTracker.CurrentRoundId
+                || !_roundTracker.IsRoundActive
+                || !SkillHelpers.IsAlive(caster))
+            {
+                stopped = true;
+                ClearAllSlowed();
+                if (SkillHelpers.IsValidPlayer(caster))
+                {
+                    services.State.CancelPlayerTimers(caster, effectTag);
+                    services.State.CancelPlayerTimers(caster, fxTag);
+                }
+                return;
+            }
+
+            if (duration > 0f && elapsed > duration + 0.01f)
+            {
+                stopped = true;
+                ClearAllSlowed();
+                services.State.CancelPlayerTimers(caster, effectTag);
+                services.State.CancelPlayerTimers(caster, fxTag);
+                return;
+            }
+
+            var origin = SkillHelpers.CloneOrigin(caster);
+            if (origin == null)
+                return;
+
+            var targets = ResolveAuraTargets(services, caster, origin, radius, targetMode, includeSelf);
+
+            if (effect == "slow")
+            {
+                float slowFactor = Math.Clamp(value, 0.2f, 0.98f);
+                float slowDuration = interval + 0.35f;
+                var activeThisPulse = new HashSet<int>();
+
+                foreach (var t in targets)
+                {
+                    if (!SkillHelpers.IsAlive(t))
+                        continue;
+                    if (!SkillHelpers.RollChance(services.Rng, chance))
+                        continue;
+
+                    services.State.SetSpeedMultiplier(t, slowSourceKey, slowFactor, slowDuration);
+                    services.Effects.SendFade(t, Color.FromArgb(40, 100, 170, 255), 300, 0);
+                    activeThisPulse.Add(t.Slot);
+                    currentlySlowedSlots.Add(t.Slot);
+                }
+
+                // Immediately restore exact personal speed for players who left the aura (or failed proc)
+                if (currentlySlowedSlots.Count > 0)
+                {
+                    List<int>? exited = null;
+                    foreach (int prevSlot in currentlySlowedSlots)
+                    {
+                        if (!activeThisPulse.Contains(prevSlot))
+                        {
+                            exited ??= new List<int>();
+                            exited.Add(prevSlot);
+                        }
+                    }
+
+                    if (exited != null)
+                    {
+                        foreach (int slot in exited)
+                        {
+                            var prevPlayer = Utilities.GetPlayerFromSlot(slot);
+                            if (prevPlayer != null && prevPlayer.IsValid)
+                                services.State.ClearSpeedMultiplier(prevPlayer, slowSourceKey);
+                            currentlySlowedSlots.Remove(slot);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                foreach (var t in targets)
+                {
+                    if (!SkillHelpers.IsAlive(t))
+                        continue;
+                    if (!SkillHelpers.RollChance(services.Rng, chance))
+                        continue;
+
+                    ApplyAuraEffect(services, caster, t, effect, value, overheal);
+                }
+            }
+
+            if (duration > 0f && elapsed >= duration)
+            {
+                stopped = true;
+                ClearAllSlowed();
+                services.State.CancelPlayerTimers(caster, effectTag);
+                services.State.CancelPlayerTimers(caster, fxTag);
+            }
+        }, repeat: true, tag: effectTag);
+
+        ctx.Activated = true;
+    }
+
+    private static float ResolveEffectValue(SkillActionConfig action, int skillLevel, string effect)
+    {
+        if (HasNumericKey(action, "value"))
+            return MathF.Max(0f, action.GetLevelFloat("value", skillLevel, effect == "slow" ? 0.65f : 5f));
+
+        if (effect is "burn" or "poison" && HasNumericKey(action, "damage"))
+            return MathF.Max(0f, action.GetLevelFloat("damage", skillLevel, effect == "burn" ? 5f : 4f));
+
+        if (effect == "heal" && HasNumericKey(action, "amount"))
+            return MathF.Max(0f, action.GetLevelFloat("amount", skillLevel, 5f));
+
+        if (effect == "freeze" && HasNumericKey(action, "freeze_duration"))
+            return MathF.Max(0f, action.GetLevelFloat("freeze_duration", skillLevel, 1.0f));
+
+        if (effect == "slow" && HasNumericKey(action, "slow_factor"))
+            return MathF.Max(0f, action.GetLevelFloat("slow_factor", skillLevel, 0.65f));
+
+        return effect switch
+        {
+            "burn" => 5f,
+            "poison" => 4f,
+            "freeze" => 1.0f,
+            "heal" => 5f,
+            "slow" => 0.65f,
+            _ => 5f
+        };
+    }
+
+    private static bool HasNumericKey(SkillActionConfig action, string key)
+        => action.LevelValues.ContainsKey(key) || action.Params.ContainsKey(key);
+
+    private static List<CCSPlayerController> ResolveAuraTargets(
+        ISkillServices services,
+        CCSPlayerController caster,
+        Vector origin,
+        float radius,
+        string targetMode,
+        bool includeSelf)
+    {
+        var results = new List<CCSPlayerController>();
+
+        if (targetMode is "self" or "owner")
+        {
+            if (SkillHelpers.IsAlive(caster))
+                results.Add(caster);
+            return results;
+        }
+
+        if (targetMode is "team" or "nearby_teammates" or "nearby_allies")
+        {
+            if (!SkillHelpers.IsPlayableTeam(caster.Team))
+                return results;
+
+            var allies = services.Combat.GetPlayersInRadius(origin, radius, teamFilter: caster.Team, exclude: caster, aliveOnly: true);
+            if (includeSelf && SkillHelpers.IsAlive(caster))
+                results.Add(caster);
+
+            foreach (var ally in allies)
+            {
+                if (SkillHelpers.IsAlive(ally) && ally.Slot != caster.Slot && ally.Team == caster.Team)
+                    results.Add(ally);
+            }
+            return results;
+        }
+
+        // Default: "enemy" (or "nearby_enemies") — respects FFA, NEVER hits teammates otherwise
+        bool ffa = services.Config.FfaEnabled || services.Sessions.IsFriendlyFireAllowed();
+        CsTeam? enemyTeam = ffa ? null : SkillHelpers.GetEnemyTeam(caster.Team);
+        if (!ffa && enemyTeam == null)
+            return results;
+
+        var enemies = services.Combat.GetPlayersInRadius(origin, radius, teamFilter: enemyTeam, exclude: caster, aliveOnly: true);
+        foreach (var enemy in enemies)
+        {
+            if (!SkillHelpers.IsAlive(enemy) || enemy.Slot == caster.Slot)
+                continue;
+            if (!ffa && enemy.Team == caster.Team)
+                continue;
+            results.Add(enemy);
+        }
+        return results;
+    }
+
+    private static void ApplyAuraEffect(
+        ISkillServices services,
+        CCSPlayerController caster,
+        CCSPlayerController target,
+        string effect,
+        float value,
+        bool overheal)
+    {
+        switch (effect)
+        {
+            case "burn":
+                if (value > 0f)
+                {
+                    services.Combat.DealDamage(target, caster, value, "inferno", ignoreArmor: false, isSkillDamage: true);
+                    services.Effects.SendFade(target, Color.FromArgb(45, 255, 90, 0), 300, 0);
+                }
+                break;
+
+            case "poison":
+                if (value > 0f)
+                {
+                    services.Combat.DealDamage(target, caster, value, "poison", ignoreArmor: true, isSkillDamage: true);
+                    services.Effects.SendFade(target, Color.FromArgb(45, 40, 200, 60), 300, 0);
+                }
+                break;
+
+            case "freeze":
+            {
+                float freezeDur = Math.Clamp(value, 0.2f, 5.0f);
+                services.State.SetFreeze(target, true, freezeDur);
+                services.Effects.SendFade(target, Color.FromArgb(55, 120, 200, 255), 400, 0);
+                break;
+            }
+
+            case "heal":
+            {
+                var tPawn = SkillHelpers.GetAlivePawn(target);
+                int healAmt = (int)Math.Round(value);
+                if (tPawn != null && healAmt > 0)
+                {
+                    int curHp = tPawn.Health;
+                    int maxHp = tPawn.MaxHealth > 0 ? tPawn.MaxHealth : 100;
+                    int newHp = overheal ? curHp + healAmt : Math.Min(curHp + healAmt, maxHp);
+                    if (newHp > curHp)
+                    {
+                        services.State.SetHealth(target, newHp, add: false, updateMaxHealth: overheal && newHp > maxHp);
+                    }
+                }
+                break;
+            }
         }
     }
 }

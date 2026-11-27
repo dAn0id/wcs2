@@ -36,6 +36,7 @@ public sealed class SkillExecutionEngine : ISkillExecutionEngine
         RegisterPrimitive(new GiveLevelsPrimitive());
         RegisterPrimitive(new PlayerScalePrimitive());
         RegisterPrimitive(new InfiniteAmmoPrimitive());
+        RegisterPrimitive(new AuraPrimitive(_roundTracker));
 
         RegisterPrimitive(new BonusDamagePrimitive());
         RegisterPrimitive(new ReflectDamagePrimitive());

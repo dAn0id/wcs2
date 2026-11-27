@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """
-WCS2 Race Builder — Semi-graphical (curses) TUI & CLI tool for creating,
-editing, and validating Warcraft:Source 2 (WCS2) race JSON files.
+WCS2 Race Builder (Legacy — prefer wcs2-race-builder.html)
+Semi-graphical (curses) TUI & CLI tool for creating, editing, and validating
+Warcraft:Source 2 (WCS2) race JSON files.
 
+For visual editing with automatic required/optional parameter panels and live
+mouseover tooltips, open `wcs2-race-builder.html` in any browser.
 Zero external dependencies (Python 3 standard library only).
 """
 
@@ -89,7 +92,8 @@ TARGETS: list[tuple[str, str]] = [
     ("self", "The skill owner (use for spawn buffs, self-heals, teleport, dash)"),
     ("victim", "The damaged player in combat (use on PlayerAttacker skills)"),
     ("attacker", "The enemy who hit you (use on PlayerVictim reflect skills)"),
-    ("enemy", "Whichever combat participant is NOT the skill owner"),
+    ("enemy", "Whichever combat participant is NOT the skill owner (or nearby enemies for aura)"),
+    ("team", "Alive teammates within radius (plus self if include_self=true; for aura)"),
     ("nearby_enemies", "All alive enemies within radius (for aoe_damage / aoe_freeze)"),
     ("nearby_teammates", "All alive teammates within radius excluding self (for instant_restock)"),
     ("all_teammates", "All alive teammates excluding self (for instant_restock)"),
@@ -170,6 +174,29 @@ PRIMITIVES_LIST: list[PrimitiveSpec] = [
         ),
         param_specs=(
             FieldSpec("tag", "str", "", "", "Unique timer tag (auto-generated if empty)"),
+        ),
+    ),
+    PrimitiveSpec(
+        key="aura",
+        category="Health, Defense & Buffs",
+        summary="Moving player-centered aura (burn, poison, freeze, heal, or slow) with ground ripple FX",
+        default_target="enemy",
+        recommended_triggers=("PlayerSpawn", "PlayerUltimate", "PlayerAbility"),
+        level_specs=(
+            FieldSpec("radius", "float", 220.0, "u", "Aura radius around caster (32-1500)", suggested_start=160, suggested_end=300),
+            FieldSpec("value", "float", 5.0, "val", "Effect magnitude (dmg / HP / freeze sec / slow mult 0.2-0.98)", suggested_start=3, suggested_end=10),
+            FieldSpec("chance", "float", 100.0, "%", "Per-target proc chance each pulse (0-100%)", suggested_start=50, suggested_end=100),
+            FieldSpec("interval", "float", 1.0, "s", "Seconds between effect pulses (>=0.25)"),
+            FieldSpec("duration", "float", 0.0, "s", "Active duration (0 = full round)"),
+        ),
+        param_specs=(
+            FieldSpec("effect", "choice", "burn", "", "Aura effect type", ("burn", "poison", "freeze", "heal", "slow")),
+            FieldSpec("include_self", "bool", True, "", "Include caster when target=team"),
+            FieldSpec("overheal", "bool", False, "", "Allow heal aura to exceed MaxHealth"),
+            FieldSpec("particle", "str", "particles/explosions_fx/explosion_hegrenade_water_ripple.vpcf", "", "Ground ripple .vpcf (empty disables)"),
+            FieldSpec("particle_interval", "float", 3.0, "s", "Seconds between ripple FX spawns"),
+            FieldSpec("particle_duration", "float", 2.5, "s", "Ripple particle lifetime"),
+            FieldSpec("message", "str", "", "", "Optional chat message on activation"),
         ),
     ),
     PrimitiveSpec(
@@ -3220,12 +3247,12 @@ def cmd_validate(paths: list[str]) -> int:
 
 def cmd_self_test() -> int:
     # 1. Exact catalog counts matching WCS2 SkillExecutionEngine.cs
-    assert len(PRIMITIVES) == 43, f"Expected 43 primitives, got {len(PRIMITIVES)}"
+    assert len(PRIMITIVES) == 44, f"Expected 44 primitives, got {len(PRIMITIVES)}"
     assert len(CUSTOM_HANDLERS) == 6, f"Expected 6 custom handlers, got {len(CUSTOM_HANDLERS)}"
     assert "teleport" in PRIMITIVES and "teleport_dash" in PRIMITIVES
-    for k in ("cheat_death", "splash_damage", "revive_teammate", "player_scale", "infinite_ammo", "instant_restock", "explosive_molotov", "aim_explosion", "air_dash"):
+    for k in ("cheat_death", "splash_damage", "revive_teammate", "player_scale", "infinite_ammo", "instant_restock", "explosive_molotov", "aim_explosion", "air_dash", "aura"):
         assert k in PRIMITIVES, f"Missing new primitive: {k}"
-    assert "nearby_teammates" in VALID_TARGET_KEYS and "all_teammates" in VALID_TARGET_KEYS
+    assert "nearby_teammates" in VALID_TARGET_KEYS and "all_teammates" in VALID_TARGET_KEYS and "team" in VALID_TARGET_KEYS
     assert len(RACE_TRIGGERS) == 9
 
     # 2. Slugify

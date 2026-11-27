@@ -20,7 +20,7 @@ namespace WCS2;
 public sealed class WcsPlugin : BasePlugin, ISkillServices
 {
     public override string ModuleName => "WCS2";
-    public override string ModuleVersion => "1.0.8";
+    public override string ModuleVersion => "1.0.9";
     public override string ModuleAuthor => "dAn!EL";
     public override string ModuleDescription => "Warcraft:Source (WCS) RPG mod for CS2 CounterStrikeSharp";
 
@@ -146,6 +146,7 @@ public sealed class WcsPlugin : BasePlugin, ISkillServices
             manifest.AddResource("particles/survival_fx/gas_cannister_impact.vpcf");
             manifest.AddResource("particles/ui/ui_electric_exp_glow.vpcf");
             manifest.AddResource("particles/explosions_fx/explosion_smokegrenade_distort.vpcf");
+            manifest.AddResource("particles/explosions_fx/explosion_hegrenade_water_ripple.vpcf");
         });
 
         RegisterListener<Listeners.OnTick>(() => _state.OnTick());

@@ -17,6 +17,7 @@ public sealed class PlayerStateManager : IPlayerStateManager
         public float BaseSpeed { get; set; } = 1.0f;
         public float AdditiveSpeed { get; set; } = 0f;
         public float? OverrideSpeed { get; set; }
+        public Dictionary<string, float> SpeedMultipliers { get; } = new(StringComparer.OrdinalIgnoreCase);
         public float TargetGravity { get; set; } = 1.0f;
         public bool WasOnLadder { get; set; }
         public float LongjumpMultiplier { get; set; } = 1.0f;
@@ -150,6 +151,7 @@ public sealed class PlayerStateManager : IPlayerStateManager
             state.BaseSpeed = 1.0f;
             state.AdditiveSpeed = 0f;
             state.OverrideSpeed = null;
+            state.SpeedMultipliers.Clear();
             state.TargetGravity = 1.0f;
             state.WasOnLadder = false;
             state.LongjumpMultiplier = 1.0f;
@@ -247,10 +249,48 @@ public sealed class PlayerStateManager : IPlayerStateManager
         }
     }
 
+    public void SetSpeedMultiplier(CCSPlayerController player, string source, float multiplier, float duration = 0f)
+    {
+        if (string.IsNullOrWhiteSpace(source)) return;
+        if (!TryGetAlivePawn(player, out var pawn)) return;
+        var state = GetOrCreate(player.Slot);
+
+        string timerTag = $"spd_mult_{source}";
+        CancelPlayerTimers(player, timerTag);
+
+        state.SpeedMultipliers[source] = Math.Clamp(multiplier, 0.1f, 3.0f);
+        ApplySpeed(pawn, state);
+
+        if (duration > 0f)
+        {
+            int slot = player.Slot;
+            SchedulePlayerTimer(player, duration, () =>
+            {
+                if (!_states.TryGetValue(slot, out var st)) return;
+                if (!st.SpeedMultipliers.Remove(source)) return;
+                var p = Utilities.GetPlayerFromSlot(slot);
+                if (TryGetAlivePawn(p, out var livePawn))
+                    ApplySpeed(livePawn, st);
+            }, repeat: false, tag: timerTag);
+        }
+    }
+
+    public void ClearSpeedMultiplier(CCSPlayerController player, string source)
+    {
+        if (player == null || !player.IsValid || string.IsNullOrWhiteSpace(source)) return;
+        CancelPlayerTimers(player, $"spd_mult_{source}");
+        if (!_states.TryGetValue(player.Slot, out var state)) return;
+        if (!state.SpeedMultipliers.Remove(source)) return;
+        if (TryGetAlivePawn(player, out var pawn))
+            ApplySpeed(pawn, state);
+    }
+
     private static float ComputeEffectiveSpeed(TransientPlayerState state)
     {
-        if (state.OverrideSpeed.HasValue) return Math.Clamp(state.OverrideSpeed.Value, 0.1f, 3.0f);
-        return Math.Clamp(state.BaseSpeed + state.AdditiveSpeed, 0.1f, 3.0f);
+        float speed = state.OverrideSpeed ?? (state.BaseSpeed + state.AdditiveSpeed);
+        foreach (float mult in state.SpeedMultipliers.Values)
+            speed *= mult;
+        return Math.Clamp(speed, 0.1f, 3.0f);
     }
 
     private static void ApplySpeed(CCSPlayerPawn pawn, TransientPlayerState state)
